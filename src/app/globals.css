@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+:root {
+  --verde: #1DB954;
+  --verde-oscuro: #17a34a;
+}
+
+@theme inline {
+  --font-sans: var(--font-nunito);
+  --color-verde: var(--verde);
+  --color-verde-oscuro: var(--verde-oscuro);
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-nunito), sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Safe area para bottom nav en PWA */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Ocultar scrollbar en carruseles */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Overscroll para PWA nativa */
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* Transiciones suaves en botones y enlaces interactivos */
+button, a, select, input {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+button:active, a:active {
+  transform: scale(0.97);
+}
+
+/* Skeleton loading animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* Standalone PWA adjustments */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
