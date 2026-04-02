@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase-server";
 import AuthButton from "@/components/AuthButton";
 import Link from "next/link";
+import MiEquipo from "@/components/MiEquipo";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -86,6 +87,9 @@ export default async function Home() {
           </div>
         </Link>
       </div>
+
+      {/* Mi equipo */}
+      <MiEquipo />
 
       {/* Pills de categorías */}
       <div className="px-4 pb-3 flex gap-2 overflow-x-auto no-scrollbar">
