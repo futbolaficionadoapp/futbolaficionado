@@ -14,6 +14,8 @@ const tabs = [
 export default function BottomNav() {
   const pathname = usePathname();
 
+  if (pathname === "/onboarding") return null;
+
   return (
     <nav className="fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur-lg border-t border-gray-100 flex justify-around items-center h-16 safe-bottom shadow-[0_-1px_3px_rgba(0,0,0,0.05)]">
       {tabs.map((tab) => {

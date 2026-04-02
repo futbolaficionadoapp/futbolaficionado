@@ -120,9 +120,6 @@ function StepBienvenida({ onElegirEquipo, onSinEquipo }) {
         </button>
       </div>
 
-      <p className="text-xs text-gray-400 mt-8">
-        Andalucía · Temporada 2025/26
-      </p>
     </div>
   );
 }
