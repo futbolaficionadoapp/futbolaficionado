@@ -222,11 +222,21 @@ function PartidoRow({ partido, clubId, mostrarResultado }) {
 
   return (
     <div className="flex items-center gap-3">
-      <div
-        className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0"
-        style={{ backgroundColor: rival?.color_principal || "#888" }}
-      >
-        {rival?.nombre?.[0]}
+      <div className="w-7 h-7 shrink-0 flex items-center justify-center">
+        {rival?.color_principal && !rival?.escudo_url ? (
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white"
+            style={{ backgroundColor: rival.color_principal }}
+          >
+            {rival.nombre?.[0]}
+          </div>
+        ) : rival?.escudo_url ? (
+          <img src={rival.escudo_url} alt={rival.nombre} className="w-7 h-7 object-contain" />
+        ) : (
+          <div className="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-[10px] font-black text-white">
+            {rival?.nombre?.[0]}
+          </div>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate">

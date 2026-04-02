@@ -495,10 +495,31 @@ function EquiposTab({ supabase }) {
             <Input label="Provincia" value={form.provincia} onChange={(v) => setForm({ ...form, provincia: v })} />
             <Input label="Año fundacion" value={form.fundacion} onChange={(v) => setForm({ ...form, fundacion: v })} type="number" />
           </Row>
-          <Input label="URL escudo" value={form.escudo_url} onChange={(v) => setForm({ ...form, escudo_url: v })} placeholder="https://..." />
+          <ImageUpload
+            label="Escudo del club"
+            value={form.escudo_url}
+            onChange={(v) => setForm({ ...form, escudo_url: v })}
+            bucket="escudos"
+            path={`clubs/${form.nombre?.toLowerCase().replace(/\s+/g, "-") || "club"}`}
+            supabase={supabase}
+          />
           <Row>
-            <Input label="Equipacion local (URL)" value={form.equipacion_local_url} onChange={(v) => setForm({ ...form, equipacion_local_url: v })} />
-            <Input label="Equipacion visitante (URL)" value={form.equipacion_visitante_url} onChange={(v) => setForm({ ...form, equipacion_visitante_url: v })} />
+            <ImageUpload
+              label="Equipación local"
+              value={form.equipacion_local_url}
+              onChange={(v) => setForm({ ...form, equipacion_local_url: v })}
+              bucket="escudos"
+              path={`equipaciones/${form.nombre?.toLowerCase().replace(/\s+/g, "-") || "club"}-local`}
+              supabase={supabase}
+            />
+            <ImageUpload
+              label="Equipación visitante"
+              value={form.equipacion_visitante_url}
+              onChange={(v) => setForm({ ...form, equipacion_visitante_url: v })}
+              bucket="escudos"
+              path={`equipaciones/${form.nombre?.toLowerCase().replace(/\s+/g, "-") || "club"}-visitante`}
+              supabase={supabase}
+            />
           </Row>
           <div className="flex items-center gap-3">
             <label className="text-xs text-gray-500">Color principal:</label>
@@ -827,7 +848,14 @@ function JugadoresTab({ supabase }) {
             <Input label="Altura (cm)" value={form.altura} onChange={(v) => setForm({ ...form, altura: v })} type="number" />
             <Input label="Peso (kg)" value={form.peso} onChange={(v) => setForm({ ...form, peso: v })} type="number" />
           </Row>
-          <Input label="URL foto" value={form.foto_url} onChange={(v) => setForm({ ...form, foto_url: v })} placeholder="https://..." />
+          <ImageUpload
+            label="Foto del jugador"
+            value={form.foto_url}
+            onChange={(v) => setForm({ ...form, foto_url: v })}
+            bucket="escudos"
+            path={`jugadores/${form.nombre?.toLowerCase().replace(/\s+/g, "-") || "jugador"}-${form.apellidos?.toLowerCase().replace(/\s+/g, "-") || ""}`}
+            supabase={supabase}
+          />
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Observaciones</label>
             <textarea
@@ -947,6 +975,62 @@ function ColaboradoresTab({ supabase }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ===================== IMAGE UPLOAD ===================== */
+
+function ImageUpload({ label, value, onChange, bucket, path, supabase }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+
+    const ext = file.name.split(".").pop();
+    const filePath = `${path}.${ext}`;
+
+    const { error: upErr } = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file, { upsert: true });
+
+    if (upErr) {
+      setError("Error al subir: " + upErr.message);
+      setUploading(false);
+      return;
+    }
+
+    const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+    onChange(data.publicUrl);
+    setUploading(false);
+  }
+
+  return (
+    <div className="flex-1">
+      {label && <label className="text-xs text-gray-500 mb-1 block">{label}</label>}
+      <div className="flex items-center gap-2">
+        {value ? (
+          <img src={value} alt="" className="w-10 h-10 object-contain rounded border border-gray-200 bg-gray-50 shrink-0" />
+        ) : (
+          <div className="w-10 h-10 rounded border border-dashed border-gray-300 bg-gray-50 shrink-0 flex items-center justify-center text-gray-300 text-lg">
+            +
+          </div>
+        )}
+        <label className={`flex-1 text-center py-2 rounded-lg text-xs font-semibold border border-gray-200 cursor-pointer transition-colors ${uploading ? "opacity-50" : "hover:border-[#1DB954] hover:text-[#1DB954]"}`}>
+          {uploading ? "Subiendo..." : value ? "Cambiar imagen" : "Subir imagen"}
+          <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
+        </label>
+        {value && (
+          <button onClick={() => onChange("")} className="text-red-400 text-xs font-semibold shrink-0">
+            Quitar
+          </button>
+        )}
+      </div>
+      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
     </div>
   );
 }

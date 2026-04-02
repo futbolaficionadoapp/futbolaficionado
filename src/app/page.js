@@ -19,8 +19,10 @@ export default async function Home() {
       .select(
         "*, local:clubs!partidos_local_id_fkey(id, nombre, escudo_url, color_principal), visitante:clubs!partidos_visitante_id_fkey(id, nombre, escudo_url, color_principal)"
       )
-      .eq("fecha", hoy)
-      .order("hora", { ascending: true }),
+      .gte("fecha", hoy)
+      .order("fecha", { ascending: true })
+      .order("hora", { ascending: true })
+      .limit(30),
     supabase
       .from("clasificacion")
       .select("*, club:clubs(id, nombre, escudo_url, color_principal)")
@@ -104,113 +106,8 @@ export default async function Home() {
         ))}
       </div>
 
-      {/* Partidos del día */}
-      <section className="px-4 pb-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">
-            Partidos del día
-          </h2>
-          {partidos && partidos.some((p) => p.estado === "en_vivo") && (
-            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 bg-red-50 px-2 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-              En vivo
-            </span>
-          )}
-        </div>
-
-        {!partidos || partidos.length === 0 ? (
-          <div className="bg-gray-50 rounded-xl p-6 text-center">
-            <p className="text-gray-400 text-sm">
-              No hay partidos programados hoy
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {partidos.map((partido) => (
-              <div
-                key={partido.id}
-                className={`bg-gray-50 rounded-xl p-3 flex items-center gap-3 ${
-                  partido.estado === "en_vivo"
-                    ? "ring-1 ring-red-200 bg-red-50/30"
-                    : ""
-                }`}
-              >
-                <div className="flex-1 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
-                      style={{
-                        backgroundColor:
-                          partido.local?.color_principal || "#888",
-                      }}
-                    >
-                      {partido.local?.nombre?.[0]}
-                    </div>
-                    <Link
-                      href={`/clubes/${partido.local?.id}`}
-                      className={`text-sm font-semibold hover:underline ${
-                        partido.estado === "finalizado" &&
-                        partido.goles_local > partido.goles_visitante
-                          ? "text-[#1DB954]"
-                          : ""
-                      }`}
-                    >
-                      {partido.local?.nombre}
-                    </Link>
-                    <span className="ml-auto font-bold text-sm tabular-nums">
-                      {partido.estado === "programado"
-                        ? ""
-                        : partido.goles_local}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
-                      style={{
-                        backgroundColor:
-                          partido.visitante?.color_principal || "#888",
-                      }}
-                    >
-                      {partido.visitante?.nombre?.[0]}
-                    </div>
-                    <Link
-                      href={`/clubes/${partido.visitante?.id}`}
-                      className={`text-sm font-semibold hover:underline ${
-                        partido.estado === "finalizado" &&
-                        partido.goles_visitante > partido.goles_local
-                          ? "text-[#1DB954]"
-                          : ""
-                      }`}
-                    >
-                      {partido.visitante?.nombre}
-                    </Link>
-                    <span className="ml-auto font-bold text-sm tabular-nums">
-                      {partido.estado === "programado"
-                        ? ""
-                        : partido.goles_visitante}
-                    </span>
-                  </div>
-                </div>
-                <div className="text-center min-w-[48px]">
-                  {partido.estado === "en_vivo" ? (
-                    <span className="text-xs font-bold text-red-500 animate-pulse">
-                      En vivo
-                    </span>
-                  ) : partido.estado === "finalizado" ? (
-                    <span className="text-[10px] font-semibold text-gray-400 uppercase">
-                      Final
-                    </span>
-                  ) : (
-                    <span className="text-xs font-semibold text-gray-500">
-                      {partido.hora?.slice(0, 5)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      {/* Próximos partidos */}
+      <ProximosPartidos partidos={partidos} hoy={hoy} />
 
       {/* Clasificación compacta */}
       <section className="px-4 pb-4">
@@ -259,8 +156,9 @@ export default async function Home() {
                 >
                   {i + 1}
                 </span>
-                <span className="font-semibold truncate">
-                  {row.club?.nombre}
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <Escudo club={row.club} size="sm" />
+                  <span className="font-semibold truncate">{row.club?.nombre}</span>
                 </span>
                 <span className="text-center text-gray-500 text-xs">
                   {row.pj}
@@ -313,5 +211,139 @@ export default async function Home() {
         </section>
       )}
     </div>
+  );
+}
+
+function Escudo({ club, size = "sm" }) {
+  const dim = size === "sm" ? "w-6 h-6" : "w-8 h-8";
+  if (club?.escudo_url) {
+    return (
+      <div className={`${dim} shrink-0 flex items-center justify-center`}>
+        <img src={club.escudo_url} alt={club.nombre} className="w-full h-full object-contain" />
+      </div>
+    );
+  }
+  return (
+    <div
+      className={`${dim} rounded-full shrink-0 flex items-center justify-center text-[8px] font-bold text-white`}
+      style={{ backgroundColor: club?.color_principal || "#888" }}
+    >
+      {club?.nombre?.[0]}
+    </div>
+  );
+}
+
+function ProximosPartidos({ partidos, hoy }) {
+  if (!partidos || partidos.length === 0) {
+    return (
+      <section className="px-4 pb-4">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">
+          Próximos partidos
+        </h2>
+        <div className="bg-gray-50 rounded-xl p-6 text-center">
+          <p className="text-gray-400 text-sm">No hay partidos programados</p>
+        </div>
+      </section>
+    );
+  }
+
+  // Agrupar por fecha
+  const grupos = {};
+  for (const p of partidos) {
+    if (!grupos[p.fecha]) grupos[p.fecha] = [];
+    grupos[p.fecha].push(p);
+  }
+
+  const hayEnVivo = partidos.some((p) => p.estado === "en_vivo");
+
+  return (
+    <section className="px-4 pb-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">
+          Próximos partidos
+        </h2>
+        {hayEnVivo && (
+          <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500 bg-red-50 px-2 py-0.5 rounded-full">
+            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+            En vivo
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        {Object.entries(grupos).map(([fecha, ps]) => {
+          const esHoy = fecha === hoy;
+          const labelFecha = esHoy
+            ? "Hoy"
+            : new Date(fecha + "T12:00:00").toLocaleDateString("es-ES", {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+              });
+
+          return (
+            <div key={fecha}>
+              <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${esHoy ? "text-[#1DB954]" : "text-gray-400"}`}>
+                {labelFecha}
+              </p>
+              <div className="space-y-2">
+                {ps.map((partido) => (
+                  <div
+                    key={partido.id}
+                    className={`bg-gray-50 rounded-xl p-3 flex items-center gap-3 ${
+                      partido.estado === "en_vivo" ? "ring-1 ring-red-200 bg-red-50/30" : ""
+                    }`}
+                  >
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <Escudo club={partido.local} size="sm" />
+                        <Link
+                          href={`/clubes/${partido.local?.id}`}
+                          className={`text-sm font-semibold hover:underline ${
+                            partido.estado === "finalizado" && partido.goles_local > partido.goles_visitante
+                              ? "text-[#1DB954]" : ""
+                          }`}
+                        >
+                          {partido.local?.nombre}
+                        </Link>
+                        <span className="ml-auto font-bold text-sm tabular-nums">
+                          {partido.estado !== "programado" ? partido.goles_local : ""}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Escudo club={partido.visitante} size="sm" />
+                        <Link
+                          href={`/clubes/${partido.visitante?.id}`}
+                          className={`text-sm font-semibold hover:underline ${
+                            partido.estado === "finalizado" && partido.goles_visitante > partido.goles_local
+                              ? "text-[#1DB954]" : ""
+                          }`}
+                        >
+                          {partido.visitante?.nombre}
+                        </Link>
+                        <span className="ml-auto font-bold text-sm tabular-nums">
+                          {partido.estado !== "programado" ? partido.goles_visitante : ""}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-center min-w-[48px]">
+                      {partido.estado === "en_vivo" ? (
+                        <span className="text-xs font-bold text-red-500 animate-pulse">En vivo</span>
+                      ) : partido.estado === "finalizado" ? (
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase">Final</span>
+                      ) : (
+                        <span className="text-xs font-semibold text-gray-500">
+                          {partido.hora?.slice(0, 5)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

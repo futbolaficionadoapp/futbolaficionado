@@ -1,4 +1,4 @@
-const CACHE_NAME = "futbolaficionado-v1";
+const CACHE_NAME = "futbolaficionado-v2";
 const STATIC_ASSETS = ["/", "/manifest.json", "/offline.html"];
 
 self.addEventListener("install", (event) => {
