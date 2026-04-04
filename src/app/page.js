@@ -106,8 +106,8 @@ export default async function Home() {
             "*, local:clubs!partidos_local_id_fkey(id, nombre, escudo_url, color_principal), visitante:clubs!partidos_visitante_id_fkey(id, nombre, escudo_url, color_principal)"
           )
           .eq("grupo_id", clasi.grupo_id)
-          .order("jornada", { ascending: false })
-          .limit(60),
+          .order("jornada", { ascending: true })
+          .order("hora", { ascending: true }),
       ]);
       tabla = tablaData || [];
       jornadaPartidos = jornadaData || [];

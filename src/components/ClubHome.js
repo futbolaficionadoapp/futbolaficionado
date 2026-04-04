@@ -72,7 +72,7 @@ export default function ClubHome({
   const [uploadingEscudo, setUploadingEscudo] = useState(false);
   const [tablaExpanded, setTablaExpanded] = useState(false);
   const [jornadaTab, setJornadaTab] = useState("actual");
-  const [cambiandoEquipo, setCambiandoEquipo] = useState(false);
+  const [showPlantilla, setShowPlantilla] = useState(false);
 
   const escudoInputRef = useRef(null);
 
@@ -115,17 +115,29 @@ export default function ClubHome({
   const sorted = [...(tabla || [])].sort((a, b) => b.puntos - a.puntos || (b.gf - b.gc) - (a.gf - a.gc));
   const posicion = sorted.findIndex((r) => r.club_id === club.id) + 1;
 
-  // Jornada activa: primero busca partidos en_vivo, si no, la última jornada con partidos jugados
-  const partidos_enVivo = (jornadaPartidos || []).filter((p) => p.estado === "en_vivo");
-  const partidos_jugados = (jornadaPartidos || []).filter((p) => p.estado === "finalizado" || p.estado === "en_vivo");
-  const maxJornada = partidos_enVivo.length > 0
-    ? partidos_enVivo[0].jornada || 0
-    : partidos_jugados.length > 0
-      ? Math.max(...partidos_jugados.map((p) => p.jornada || 0))
-      : 0;
-  const jornadaActualPartidos = (jornadaPartidos || []).filter((p) => p.jornada === maxJornada);
+  // Jornada activa
+  const hoyStr = new Date().toISOString().split("T")[0];
+  // 1. Hay partidos en vivo → esa jornada
+  const jornadaEnVivo = (jornadaPartidos || []).find((p) => p.estado === "en_vivo")?.jornada;
+  // 2. Hay partidos programados para hoy → esa jornada
+  const jornadaHoy = (jornadaPartidos || []).find((p) => p.fecha === hoyStr && p.estado === "programado")?.jornada;
+  // 3. Última jornada con al menos un partido finalizado
+  const finalizadosGrupo = (jornadaPartidos || []).filter((p) => p.estado === "finalizado");
+  const ultimaJornadaJugada = finalizadosGrupo.length > 0
+    ? Math.max(...finalizadosGrupo.map((p) => p.jornada || 0))
+    : 0;
+  const maxJornada = jornadaEnVivo || jornadaHoy || ultimaJornadaJugada || 0;
+
+  // Todos los partidos de la jornada activa, ordenados por hora
+  const jornadaActualPartidos = (jornadaPartidos || [])
+    .filter((p) => p.jornada === maxJornada)
+    .sort((a, b) => (a.hora || "").localeCompare(b.hora || ""));
+
+  // Siguiente jornada: la siguiente con partidos programados
   const siguienteJornada = maxJornada + 1;
-  const siguienteJornadaPartidos = (jornadaPartidos || []).filter((p) => p.jornada === siguienteJornada);
+  const siguienteJornadaPartidos = (jornadaPartidos || [])
+    .filter((p) => p.jornada === siguienteJornada)
+    .sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "") || (a.hora || "").localeCompare(b.hora || ""));
 
   // Stats from events
   const golesMap = {};
@@ -148,25 +160,6 @@ export default function ClubHome({
   const topAsistentes = Object.values(asistMap).sort((a, b) => b.count - a.count).slice(0, 3);
 
   // ---- Handlers ----
-
-  async function handleCambiarEquipo() {
-    setCambiandoEquipo(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase
-          .from("perfiles")
-          .update({ club_favorito_id: null })
-          .eq("id", user.id);
-      }
-      localStorage.removeItem("club_favorito");
-      localStorage.removeItem("onboarding_done");
-      router.push("/onboarding");
-    } catch (e) {
-      console.error(e);
-      setCambiandoEquipo(false);
-    }
-  }
 
   function startEditPartido(p) {
     setEditingPartidoId(p.id);
@@ -321,36 +314,68 @@ export default function ClubHome({
           </div>
         )}
 
-        {/* Forma dentro del banner */}
-        {forma.length > 0 && (
-          <div className="relative flex items-center gap-2 mt-3 pt-3 border-t border-white/20">
-            <span className="text-[9px] font-bold opacity-60 uppercase tracking-wider shrink-0">Forma</span>
-            <div className="flex gap-1.5">
-              {forma.map((r, i) => (
-                <span
-                  key={i}
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-                    r === "V" ? "bg-white/25 text-white" :
-                    r === "E" ? "bg-white/15 text-white/80" :
-                    "bg-black/20 text-white/70"
-                  }`}
-                >
-                  {r}
-                </span>
-              ))}
-            </div>
+        {/* Forma + botones — misma línea */}
+        <div className="relative flex items-center gap-2 mt-3 pt-3 border-t border-white/20">
+          <span className="text-[10px] font-bold text-white uppercase tracking-wider shrink-0">Forma</span>
+          <div className="flex gap-1 flex-1">
+            {forma.length > 0 ? forma.map((r, i) => (
+              <span
+                key={i}
+                className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-black ${
+                  r === "V" ? "bg-green-500 text-white" :
+                  r === "E" ? "bg-yellow-400 text-gray-900" :
+                  "bg-red-500 text-white"
+                }`}
+              >
+                {r}
+              </span>
+            )) : (
+              <span className="text-[10px] opacity-60">—</span>
+            )}
           </div>
-        )}
-
-        {/* Cambiar equipo */}
-        <button
-          onClick={handleCambiarEquipo}
-          disabled={cambiandoEquipo}
-          className="mt-3 text-[11px] opacity-70 hover:opacity-100 font-semibold"
-        >
-          {cambiandoEquipo ? "..." : "Cambiar equipo →"}
-        </button>
+          {/* Botones plantilla + club */}
+          <button
+            onClick={() => setShowPlantilla((v) => !v)}
+            className="shrink-0 text-[10px] font-bold bg-white/25 hover:bg-white/35 text-white px-2.5 py-1 rounded-full transition-colors"
+          >
+            👥 Plantilla
+          </button>
+          <Link
+            href={`/clubes/${club.id}`}
+            className="shrink-0 text-[10px] font-bold bg-white/25 hover:bg-white/35 text-white px-2.5 py-1 rounded-full transition-colors"
+          >
+            ℹ️ Club
+          </Link>
+        </div>
       </section>
+
+      {/* ---- Plantilla inline (toggle) ---- */}
+      {showPlantilla && plantilla && plantilla.length > 0 && (
+        <section className="px-4 py-3 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Plantilla</p>
+            <button onClick={() => setShowPlantilla(false)} className="text-xs text-gray-400 hover:text-gray-600">✕ Cerrar</button>
+          </div>
+          {["portero","defensa","centrocampista","delantero"].map((pos) => {
+            const grupo = plantilla.filter((j) => j.jugador?.posicion === pos);
+            if (!grupo.length) return null;
+            const posLabel = { portero:"Porteros", defensa:"Defensas", centrocampista:"Centrocampistas", delantero:"Delanteros" };
+            return (
+              <div key={pos} className="mb-2">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{posLabel[pos]}</p>
+                <div className="space-y-0.5">
+                  {grupo.map((j) => (
+                    <Link key={j.jugador?.id} href={`/jugadores/${j.jugador?.id}`} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+                      <span className="text-xs text-gray-400 w-5 text-center tabular-nums">{j.dorsal || "—"}</span>
+                      <span className="text-sm font-medium">{j.jugador?.nombre} {j.jugador?.apellidos?.split(" ")[0]}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {/* ---- Section 3: Partidos cards ---- */}
       <section className="px-4 pb-3">
@@ -641,7 +666,7 @@ function PartidoCard({
         <EscudoBadge club={rival} size="sm" />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold truncate">
-            vs {rival?.nombre}
+            {rival?.nombre}
           </p>
           {partido.fecha && (
             <p className="text-[10px] text-gray-400">
