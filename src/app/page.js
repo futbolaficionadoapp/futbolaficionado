@@ -66,13 +66,13 @@ export default async function Home() {
 
       supabase
         .from("eventos_partido")
-        .select("jugador_id, jugador:jugadores(id, nombre, apellidos)")
+        .select("jugador_id, jugador:jugadores!eventos_partido_jugador_id_fkey(id, nombre, apellidos)")
         .eq("equipo_id", clubId)
         .eq("tipo", "gol"),
 
       supabase
         .from("eventos_partido")
-        .select("jugador_id, jugador:jugadores(id, nombre, apellidos)")
+        .select("jugador_id, jugador:jugadores!eventos_partido_jugador_id_fkey(id, nombre, apellidos)")
         .eq("equipo_id", clubId)
         .eq("tipo", "asistencia"),
 
@@ -191,7 +191,7 @@ export default async function Home() {
     supabase
       .from("eventos_partido")
       .select(
-        "jugador_id, jugador:jugadores(id, nombre, apellidos), equipo:clubs!eventos_partido_equipo_id_fkey(id, nombre)"
+        "jugador_id, jugador:jugadores!eventos_partido_jugador_id_fkey(id, nombre, apellidos), equipo:clubs!eventos_partido_equipo_id_fkey(id, nombre)"
       )
       .eq("tipo", "gol"),
   ]);

@@ -180,7 +180,7 @@ function PartidoEditor({ partido, clubId, supabase, onUpdate }) {
   async function loadEventos() {
     const { data } = await supabase
       .from("eventos_partido")
-      .select("*, jugador:jugadores(nombre, apellidos)")
+      .select("*, jugador:jugadores!eventos_partido_jugador_id_fkey(nombre, apellidos)")
       .eq("partido_id", partido.id)
       .order("minuto", { ascending: true });
     setEventos(data || []);

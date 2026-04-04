@@ -50,7 +50,7 @@ export default async function ClubPage({ params }) {
   const { data: goles } = await supabase
     .from("eventos_partido")
     .select(
-      "jugador_id, jugador:jugadores(id, nombre, apellidos), minuto"
+      "jugador_id, jugador:jugadores!eventos_partido_jugador_id_fkey(id, nombre, apellidos), minuto"
     )
     .eq("equipo_id", id)
     .eq("tipo", "gol");

@@ -1709,7 +1709,7 @@ function PartidoEditor({ partido, supabase, onBack }) {
       const [{ data: evs }, { data: jl }, { data: jv }] = await Promise.all([
         supabase
           .from("eventos_partido")
-          .select("*, jugador:jugadores(id, nombre, apellidos), equipo:clubs(id, nombre)")
+          .select("*, jugador:jugadores!eventos_partido_jugador_id_fkey(id, nombre, apellidos), equipo:clubs(id, nombre)")
           .eq("partido_id", partido.id)
           .order("minuto", { ascending: true }),
         supabase
@@ -1760,7 +1760,7 @@ function PartidoEditor({ partido, supabase, onBack }) {
         jugador_id: formEvento.jugador_id || null,
         minuto: formEvento.minuto ? parseInt(formEvento.minuto) : null,
       })
-      .select("*, jugador:jugadores(id, nombre, apellidos), equipo:clubs(id, nombre)")
+      .select("*, jugador:jugadores!eventos_partido_jugador_id_fkey(id, nombre, apellidos), equipo:clubs(id, nombre)")
       .single();
     if (data) {
       setEventos((prev) => [...prev, data].sort((a, b) => (a.minuto || 0) - (b.minuto || 0)));

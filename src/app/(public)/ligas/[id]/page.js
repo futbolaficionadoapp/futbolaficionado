@@ -46,7 +46,7 @@ export default async function LigaPage({ params }) {
       supabase
         .from("eventos_partido")
         .select(
-          "jugador_id, jugador:jugadores(id, nombre, apellidos), equipo:clubs!eventos_partido_equipo_id_fkey(id, nombre), partido:partidos!inner(grupo_id)"
+          "jugador_id, jugador:jugadores!eventos_partido_jugador_id_fkey(id, nombre, apellidos), equipo:clubs!eventos_partido_equipo_id_fkey(id, nombre), partido:partidos!inner(grupo_id)"
         )
         .eq("tipo", "gol")
         .eq("partido.grupo_id", grupoId),
