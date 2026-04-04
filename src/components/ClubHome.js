@@ -133,6 +133,9 @@ export default function ClubHome({
     .filter((p) => p.jornada === maxJornada)
     .sort((a, b) => (a.hora || "").localeCompare(b.hora || ""));
 
+  // Partidos en vivo de la jornada actual
+  const partidos_enVivo = jornadaActualPartidos.filter((p) => p.estado === "en_vivo");
+
   // Siguiente jornada: la siguiente con partidos programados
   const siguienteJornada = maxJornada + 1;
   const siguienteJornadaPartidos = (jornadaPartidos || [])
