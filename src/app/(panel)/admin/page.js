@@ -50,6 +50,7 @@ export default function AdminPage() {
     { id: "equipos", label: "Equipos" },
     { id: "jugadores", label: "Jugadores" },
     { id: "colaboradores", label: "Colaboradores" },
+    ...(perfil.is_ceo ? [{ id: "admins", label: "⚙ Admins" }] : []),
   ];
 
   return (
@@ -80,6 +81,7 @@ export default function AdminPage() {
         {tab === "equipos" && <EquiposTab supabase={supabase} />}
         {tab === "jugadores" && <JugadoresTab supabase={supabase} />}
         {tab === "colaboradores" && <ColaboradoresTab supabase={supabase} />}
+        {tab === "admins" && perfil.is_ceo && <AdminsTab supabase={supabase} ceoId={perfil.id} />}
       </div>
     </div>
   );
@@ -99,6 +101,7 @@ function CategoriasTab({ supabase }) {
     comunidad_autonoma: "",
     provincia: "",
     temporada_id: "",
+    logo_url: "",
   });
 
   const load = useCallback(async () => {
@@ -181,6 +184,7 @@ function CategoriasTab({ supabase }) {
             comunidad_autonoma: "",
             provincia: "",
             temporada_id: temporadas[0]?.id || "",
+            logo_url: "",
           });
         }}
         className="w-full mb-3 py-2 rounded-xl text-sm font-semibold border-2 border-dashed border-gray-200 text-gray-400 hover:border-[#1DB954] hover:text-[#1DB954] transition-colors"
@@ -192,13 +196,23 @@ function CategoriasTab({ supabase }) {
         <FormCard onCancel={() => setEditando(null)} onSave={handleGuardar} canSave={form.nombre && form.categoria}>
           <Input label="Competicion" value={form.nombre} onChange={(v) => setForm({ ...form, nombre: v })} placeholder="Ej: 4a Provincial Grupo 1" />
           <Input label="Categoria" value={form.categoria} onChange={(v) => setForm({ ...form, categoria: v })} placeholder="Ej: Provincial, Tercera RFEF..." />
-          <Input label="Comunidad Autonoma" value={form.comunidad_autonoma} onChange={(v) => setForm({ ...form, comunidad_autonoma: v })} placeholder="Ej: Andalucia" />
-          <Input label="Provincia" value={form.provincia} onChange={(v) => setForm({ ...form, provincia: v })} placeholder="Ej: Cadiz" />
+          <Row>
+            <Input label="Comunidad Autonoma" value={form.comunidad_autonoma} onChange={(v) => setForm({ ...form, comunidad_autonoma: v })} placeholder="Ej: Andalucia" />
+            <Input label="Provincia" value={form.provincia} onChange={(v) => setForm({ ...form, provincia: v })} placeholder="Ej: Cadiz" />
+          </Row>
           <Select
             label="Temporada"
             value={form.temporada_id}
             onChange={(v) => setForm({ ...form, temporada_id: v })}
             options={temporadas.map((t) => ({ value: t.id, label: t.nombre }))}
+          />
+          <ImageUpload
+            label="Logo de la competicion"
+            value={form.logo_url}
+            onChange={(v) => setForm({ ...form, logo_url: v })}
+            bucket="escudos"
+            path={`ligas/${form.nombre?.toLowerCase().replace(/\s+/g, "-") || "liga"}`}
+            supabase={supabase}
           />
         </FormCard>
       )}
@@ -233,6 +247,7 @@ function CategoriasTab({ supabase }) {
                       comunidad_autonoma: liga.comunidad_autonoma || "",
                       provincia: liga.provincia || "",
                       temporada_id: liga.temporada_id || "",
+                      logo_url: liga.logo_url || "",
                     });
                   }}
                 />
@@ -387,8 +402,8 @@ function EquiposTab({ supabase }) {
   const [editando, setEditando] = useState(null);
   const [detalle, setDetalle] = useState(null);
   const emptyForm = {
-    nombre: "", estadio: "", localidad: "", municipio: "", provincia: "",
-    fundacion: "", color_principal: "#1DB954",
+    nombre: "", estadio: "", localidad: "", municipio: "", provincia: "", comunidad_autonoma: "",
+    fundacion: "", color_principal: "#1DB954", presidente: "", telefono: "", email_contacto: "",
     escudo_url: "", direccion: "", google_maps_url: "",
     equipacion_local_url: "", equipacion_visitante_url: "",
     redes_sociales: { instagram: "", twitter: "", facebook: "", web: "", youtube: "", tiktok: "" },
@@ -438,8 +453,12 @@ function EquiposTab({ supabase }) {
       localidad: club.localidad || "",
       municipio: club.municipio || "",
       provincia: club.provincia || "",
+      comunidad_autonoma: club.comunidad_autonoma || "",
       fundacion: club.fundacion?.toString() || "",
       color_principal: club.color_principal || "#1DB954",
+      presidente: club.presidente || "",
+      telefono: club.telefono || "",
+      email_contacto: club.email_contacto || "",
       escudo_url: club.escudo_url || "",
       direccion: club.direccion || "",
       google_maps_url: club.google_maps_url || "",
@@ -492,8 +511,16 @@ function EquiposTab({ supabase }) {
             <Input label="Municipio" value={form.municipio} onChange={(v) => setForm({ ...form, municipio: v })} />
           </Row>
           <Row>
+            <Input label="Comunidad Autonoma" value={form.comunidad_autonoma} onChange={(v) => setForm({ ...form, comunidad_autonoma: v })} />
             <Input label="Provincia" value={form.provincia} onChange={(v) => setForm({ ...form, provincia: v })} />
+          </Row>
+          <Row>
             <Input label="Año fundacion" value={form.fundacion} onChange={(v) => setForm({ ...form, fundacion: v })} type="number" />
+            <Input label="Presidente" value={form.presidente} onChange={(v) => setForm({ ...form, presidente: v })} />
+          </Row>
+          <Row>
+            <Input label="Telefono" value={form.telefono} onChange={(v) => setForm({ ...form, telefono: v })} placeholder="+34 600 000 000" />
+            <Input label="Email contacto" value={form.email_contacto} onChange={(v) => setForm({ ...form, email_contacto: v })} placeholder="club@email.com" />
           </Row>
           <ImageUpload
             label="Escudo del club"
@@ -735,6 +762,7 @@ function JugadoresTab({ supabase }) {
   const [busqueda, setBusqueda] = useState("");
   const emptyForm = {
     nombre: "", apellidos: "", nombre_futbolistico: "", posicion: "MED",
+    posicion_especifica: "", pie_dominante: "Diestro",
     fecha_nacimiento: "", lugar_nacimiento: "", nacionalidad: "",
     altura: "", peso: "", foto_url: "",
     equipo_procedencia: "", observaciones: "",
@@ -785,6 +813,8 @@ function JugadoresTab({ supabase }) {
       apellidos: j.apellidos || "",
       nombre_futbolistico: j.nombre_futbolistico || "",
       posicion: j.posicion || "MED",
+      posicion_especifica: j.posicion_especifica || "",
+      pie_dominante: j.pie_dominante || "Diestro",
       fecha_nacimiento: j.fecha_nacimiento || "",
       lugar_nacimiento: j.lugar_nacimiento || "",
       nacionalidad: j.nacionalidad || "",
@@ -823,16 +853,58 @@ function JugadoresTab({ supabase }) {
             <Input label="Apellidos" value={form.apellidos} onChange={(v) => setForm({ ...form, apellidos: v })} />
           </Row>
           <Row>
-            <Input label="Nombre futbolistico" value={form.nombre_futbolistico} onChange={(v) => setForm({ ...form, nombre_futbolistico: v })} placeholder="Apodo o nombre conocido" />
+            <Input label="Apodo / Nombre futbolistico" value={form.nombre_futbolistico} onChange={(v) => setForm({ ...form, nombre_futbolistico: v })} placeholder="Nombre conocido" />
             <Select
               label="Posicion"
               value={form.posicion}
-              onChange={(v) => setForm({ ...form, posicion: v })}
+              onChange={(v) => setForm({ ...form, posicion: v, posicion_especifica: "" })}
               options={[
                 { value: "POR", label: "Portero" },
                 { value: "DEF", label: "Defensa" },
                 { value: "MED", label: "Centrocampista" },
                 { value: "DEL", label: "Delantero" },
+              ]}
+            />
+          </Row>
+          <Row>
+            <Select
+              label="Posicion especifica"
+              value={form.posicion_especifica}
+              onChange={(v) => setForm({ ...form, posicion_especifica: v })}
+              options={[
+                { value: "", label: "— Sin especificar —" },
+                ...{
+                  POR: [{ value: "Portero", label: "Portero" }],
+                  DEF: [
+                    { value: "Lateral derecho", label: "Lateral derecho" },
+                    { value: "Lateral izquierdo", label: "Lateral izquierdo" },
+                    { value: "Central", label: "Central" },
+                  ],
+                  MED: [
+                    { value: "Pivote", label: "Pivote" },
+                    { value: "Mediocentro", label: "Mediocentro" },
+                    { value: "Interior", label: "Interior" },
+                    { value: "Mediapunta", label: "Mediapunta" },
+                    { value: "Extremo derecho", label: "Extremo derecho" },
+                    { value: "Extremo izquierdo", label: "Extremo izquierdo" },
+                  ],
+                  DEL: [
+                    { value: "Delantero centro", label: "Delantero centro" },
+                    { value: "Segunda punta", label: "Segunda punta" },
+                    { value: "Extremo derecho", label: "Extremo derecho" },
+                    { value: "Extremo izquierdo", label: "Extremo izquierdo" },
+                  ],
+                }[form.posicion] || [],
+              ]}
+            />
+            <Select
+              label="Pie dominante"
+              value={form.pie_dominante}
+              onChange={(v) => setForm({ ...form, pie_dominante: v })}
+              options={[
+                { value: "Diestro", label: "Diestro" },
+                { value: "Zurdo", label: "Zurdo" },
+                { value: "Ambidiestro", label: "Ambidiestro" },
               ]}
             />
           </Row>
@@ -975,6 +1047,115 @@ function ColaboradoresTab({ supabase }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ===================== ADMINS (solo CEO) ===================== */
+
+function AdminsTab({ supabase, ceoId }) {
+  const [usuarios, setUsuarios] = useState([]);
+  const [busqueda, setBusqueda] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("perfiles")
+      .select("id, nombre, email, rol, is_ceo, avatar_url")
+      .order("nombre");
+    setUsuarios(data || []);
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function promoverAdmin(id) {
+    if (!confirm("¿Dar permisos de administrador a este usuario?")) return;
+    await supabase.from("perfiles").update({ rol: "admin" }).eq("id", id);
+    load();
+  }
+
+  async function degradar(id) {
+    if (!confirm("¿Quitar permisos de administrador? El usuario pasará a ser visitante.")) return;
+    await supabase.from("perfiles").update({ rol: "visitante" }).eq("id", id);
+    load();
+  }
+
+  const filtrados = usuarios.filter((u) =>
+    `${u.nombre} ${u.email}`.toLowerCase().includes(busqueda.toLowerCase())
+  );
+
+  if (loading) return <p className="text-gray-400 text-sm">Cargando...</p>;
+
+  const admins = filtrados.filter((u) => u.rol === "admin");
+  const resto = filtrados.filter((u) => u.rol !== "admin");
+
+  return (
+    <div>
+      <p className="text-xs text-gray-400 mb-3">
+        Solo tú (CEO) puedes gestionar los administradores de la plataforma.
+      </p>
+
+      <input
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+        placeholder="Buscar usuario..."
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-[#1DB954]/30"
+      />
+
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+        Administradores ({admins.length})
+      </p>
+      <div className="space-y-1.5 mb-5">
+        {admins.map((u) => (
+          <div key={u.id} className="flex items-center gap-3 bg-red-50 rounded-xl p-3">
+            {u.avatar_url ? (
+              <img src={u.avatar_url} className="w-8 h-8 rounded-full object-cover shrink-0" alt="" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-red-200 text-red-700 flex items-center justify-center text-xs font-bold shrink-0">
+                {u.nombre?.[0]?.toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate">
+                {u.nombre} {u.is_ceo && <span className="text-[10px] text-red-500 font-bold ml-1">CEO</span>}
+              </p>
+              <p className="text-xs text-gray-400 truncate">{u.email}</p>
+            </div>
+            {u.id !== ceoId && (
+              <BtnSmall label="Quitar admin" color="red" onClick={() => degradar(u.id)} />
+            )}
+          </div>
+        ))}
+        {admins.length === 0 && (
+          <p className="text-xs text-gray-400 text-center py-2">No hay administradores</p>
+        )}
+      </div>
+
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+        Otros usuarios ({resto.length})
+      </p>
+      <div className="space-y-1.5">
+        {resto.slice(0, 30).map((u) => (
+          <div key={u.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+            {u.avatar_url ? (
+              <img src={u.avatar_url} className="w-8 h-8 rounded-full object-cover shrink-0" alt="" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-bold shrink-0">
+                {u.nombre?.[0]?.toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate">{u.nombre}</p>
+              <p className="text-xs text-gray-400 truncate">{u.email} · {u.rol}</p>
+            </div>
+            <BtnSmall label="Hacer admin" color="green" onClick={() => promoverAdmin(u.id)} />
+          </div>
+        ))}
+        {resto.length === 0 && (
+          <p className="text-xs text-gray-400 text-center py-2">No hay más usuarios</p>
+        )}
+      </div>
     </div>
   );
 }
