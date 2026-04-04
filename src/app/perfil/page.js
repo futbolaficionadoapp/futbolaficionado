@@ -29,6 +29,7 @@ const PROVIDER_ICON = {
 export default function PerfilPage() {
   const [perfil, setPerfil] = useState(null);
   const [authUser, setAuthUser] = useState(null);
+  const [clubFavorito, setClubFavorito] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState(false);
@@ -57,6 +58,16 @@ export default function PerfilPage() {
 
       setPerfil(data);
       setNuevoNombre(data?.nombre || "");
+
+      if (data?.club_favorito_id) {
+        const { data: club } = await supabase
+          .from("clubs")
+          .select("id, nombre")
+          .eq("id", data.club_favorito_id)
+          .single();
+        setClubFavorito(club);
+      }
+
       setLoading(false);
     }
     loadPerfil();
@@ -269,12 +280,138 @@ export default function PerfilPage() {
         </div>
       </div>
 
+      {/* Sección colaborador */}
+      {perfil.rol === "visitante" && (
+        <ColaboradorSection
+          userId={authUser?.id}
+          clubId={perfil.club_favorito_id}
+          clubNombre={clubFavorito?.nombre}
+          supabase={supabase}
+        />
+      )}
+      {perfil.rol === "colaborador" && (
+        <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+          <p className="text-sm font-bold text-green-700">✓ Eres colaborador</p>
+          <p className="text-xs text-green-600 mt-1">
+            Puedes gestionar partidos y plantillas desde el panel de colaborador
+          </p>
+        </div>
+      )}
+
       <button
         onClick={handleLogout}
         className="w-full mt-8 py-2.5 rounded-xl text-sm font-semibold text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
       >
         Cerrar sesión
       </button>
+    </div>
+  );
+}
+
+/* ---- Sección de solicitud de colaborador ---- */
+function ColaboradorSection({ userId, clubId, clubNombre, supabase }) {
+  const [estado, setEstado] = useState(null); // null | "none" | "pending" | "approved" | "modal"
+  const [enviando, setEnviando] = useState(false);
+
+  useEffect(() => {
+    if (!userId || !clubId) {
+      setEstado("none");
+      return;
+    }
+    supabase
+      .from("colaboradores")
+      .select("aprobado")
+      .eq("usuario_id", userId)
+      .eq("club_id", clubId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) setEstado("none");
+        else setEstado(data.aprobado ? "approved" : "pending");
+      });
+  }, [userId, clubId]);
+
+  async function confirmar() {
+    setEnviando(true);
+    await supabase
+      .from("colaboradores")
+      .insert({ usuario_id: userId, club_id: clubId });
+    setEstado("pending");
+    setEnviando(false);
+  }
+
+  if (estado === null) return null;
+
+  return (
+    <div className="mt-4 bg-gray-50 rounded-xl p-4">
+      <h2 className="text-sm font-bold text-gray-700 mb-3">¿Quieres colaborar?</h2>
+
+      {!clubId && (
+        <p className="text-xs text-gray-400">
+          Selecciona un equipo favorito primero para poder solicitar ser colaborador de ese club.
+        </p>
+      )}
+
+      {clubId && estado === "none" && (
+        <>
+          <p className="text-xs text-gray-500 mb-3">
+            Colabora con <span className="font-semibold">{clubNombre}</span> introduciendo resultados, alineaciones, goles y más.
+          </p>
+          <button
+            onClick={() => setEstado("modal")}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#1DB954] text-white hover:bg-[#17a34a] transition-colors"
+          >
+            Solicitar ser colaborador
+          </button>
+        </>
+      )}
+
+      {estado === "pending" && (
+        <div className="flex items-center gap-2 text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+          <span className="text-base">⏳</span>
+          <p className="text-xs font-semibold">Solicitud enviada — pendiente de aprobación</p>
+        </div>
+      )}
+
+      {estado === "approved" && (
+        <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+          <span className="text-base">✓</span>
+          <p className="text-xs font-semibold">Solicitud aprobada para {clubNombre}</p>
+        </div>
+      )}
+
+      {estado === "modal" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-bold mb-1">Colaborar con {clubNombre}</h3>
+            <p className="text-sm text-gray-500 mb-4">Como colaborador podrás:</p>
+            <ul className="text-sm text-gray-600 space-y-1.5 mb-6">
+              {["Introducir resultados en directo", "Registrar goles y tarjetas", "Gestionar alineaciones y cambios", "Actualizar la plantilla"].map((item) => (
+                <li key={item} className="flex items-center gap-2">
+                  <span className="text-[#1DB954] font-bold">✓</span> {item}
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEstado("none")}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmar}
+                disabled={enviando}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[#1DB954] text-white disabled:opacity-50"
+              >
+                {enviando ? "Enviando..." : "Solicitar"}
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400 text-center mt-3">
+              Un administrador revisará tu solicitud
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

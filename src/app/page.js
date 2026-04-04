@@ -69,9 +69,6 @@ export default async function Home() {
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider bg-[#1DB954] text-white px-2 py-0.5 rounded-full">
-            Beta
-          </span>
           <AuthButton />
         </div>
       </header>
