@@ -50,6 +50,7 @@ export default function AdminPage() {
     { id: "equipos", label: "Equipos" },
     { id: "jugadores", label: "Jugadores" },
     { id: "colaboradores", label: "Colaboradores" },
+    { id: "peticiones", label: "Peticiones" },
     ...(perfil.is_ceo ? [{ id: "admins", label: "⚙ Admins" }] : []),
   ];
 
@@ -81,6 +82,7 @@ export default function AdminPage() {
         {tab === "equipos" && <EquiposTab supabase={supabase} />}
         {tab === "jugadores" && <JugadoresTab supabase={supabase} />}
         {tab === "colaboradores" && <ColaboradoresTab supabase={supabase} />}
+        {tab === "peticiones" && <PeticionesAdminTab supabase={supabase} adminId={perfil.id} />}
         {tab === "admins" && perfil.is_ceo && <AdminsTab supabase={supabase} ceoId={perfil.id} />}
       </div>
     </div>
@@ -1047,6 +1049,211 @@ function ColaboradoresTab({ supabase }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ===================== PETICIONES ===================== */
+
+const TIPO_ICON_ADMIN = { competicion: "🏆", equipo: "🏟️", jugador: "👤" };
+const TIPO_LABEL_ADMIN = { competicion: "Competición", equipo: "Equipo", jugador: "Jugador" };
+
+function PeticionesAdminTab({ supabase, adminId }) {
+  const [peticiones, setPeticiones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filtro, setFiltro] = useState("pendiente");
+  const [rechazando, setRechazando] = useState(null);
+  const [notaRechazo, setNotaRechazo] = useState("");
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("peticiones")
+      .select("*, usuario:perfiles(nombre, email, avatar_url)")
+      .order("created_at", { ascending: false });
+    setPeticiones(data || []);
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function aprobar(peticion) {
+    const d = peticion.datos;
+    let entidadId = null;
+
+    if (peticion.tipo === "competicion") {
+      const { data: temporadas } = await supabase.from("temporadas").select("id").limit(1).single();
+      const { data } = await supabase.from("ligas").insert({
+        nombre: d.nombre, categoria: d.categoria,
+        comunidad_autonoma: d.comunidad_autonoma, provincia: d.provincia,
+        logo_url: d.logo_url || null, activa: true,
+        temporada_id: temporadas?.id,
+      }).select().single();
+      if (data) {
+        await supabase.from("grupos").insert({ liga_id: data.id, nombre: "Grupo Único" });
+        entidadId = data.id;
+      }
+    }
+
+    if (peticion.tipo === "equipo") {
+      const { data } = await supabase.from("clubs").insert({
+        nombre: d.nombre, comunidad_autonoma: d.comunidad_autonoma,
+        provincia: d.provincia, municipio: d.municipio,
+        presidente: d.presidente, telefono: d.telefono,
+        email_contacto: d.email_contacto,
+        fundacion: d.fundacion ? parseInt(d.fundacion) : null,
+        color_principal: d.color_principal || "#1DB954",
+        escudo_url: d.escudo_url || null,
+      }).select().single();
+      if (data) entidadId = data.id;
+    }
+
+    if (peticion.tipo === "jugador") {
+      const { data } = await supabase.from("jugadores").insert({
+        nombre: d.nombre, apellidos: d.apellidos,
+        nombre_futbolistico: d.nombre_futbolistico,
+        posicion: d.posicion, posicion_especifica: d.posicion_especifica,
+        pie_dominante: d.pie_dominante,
+        fecha_nacimiento: d.fecha_nacimiento || null,
+        lugar_nacimiento: d.lugar_nacimiento, nacionalidad: d.nacionalidad,
+        altura: d.altura ? parseInt(d.altura) : null,
+        peso: d.peso ? parseInt(d.peso) : null,
+        equipo_procedencia: d.equipo_procedencia,
+        foto_url: d.foto_url || null,
+      }).select().single();
+      if (data) entidadId = data.id;
+    }
+
+    await supabase.from("peticiones").update({
+      estado: "aprobado", admin_id: adminId,
+      entidad_creada_id: entidadId, updated_at: new Date().toISOString(),
+    }).eq("id", peticion.id);
+
+    load();
+  }
+
+  async function rechazar(id) {
+    await supabase.from("peticiones").update({
+      estado: "rechazado", admin_id: adminId,
+      notas_admin: notaRechazo || null, updated_at: new Date().toISOString(),
+    }).eq("id", id);
+    setRechazando(null);
+    setNotaRechazo("");
+    load();
+  }
+
+  if (loading) return <p className="text-gray-400 text-sm">Cargando...</p>;
+
+  const filtradas = peticiones.filter((p) => p.estado === filtro);
+
+  const counts = {
+    pendiente: peticiones.filter((p) => p.estado === "pendiente").length,
+    aprobado: peticiones.filter((p) => p.estado === "aprobado").length,
+    rechazado: peticiones.filter((p) => p.estado === "rechazado").length,
+  };
+
+  return (
+    <div>
+      {/* Filtro */}
+      <div className="flex gap-1 mb-4 bg-gray-100 rounded-xl p-1">
+        {["pendiente", "aprobado", "rechazado"].map((e) => (
+          <button key={e} onClick={() => setFiltro(e)}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              filtro === e ? "bg-white shadow-sm text-gray-800" : "text-gray-400"
+            }`}
+          >
+            {e.charAt(0).toUpperCase() + e.slice(1)}
+            {counts[e] > 0 && <span className={`ml-1 ${e === "pendiente" ? "text-yellow-600" : ""}`}>({counts[e]})</span>}
+          </button>
+        ))}
+      </div>
+
+      {filtradas.length === 0 && (
+        <p className="text-gray-400 text-sm text-center py-8">No hay peticiones {filtro}s</p>
+      )}
+
+      <div className="space-y-3">
+        {filtradas.map((p) => (
+          <div key={p.id} className="bg-gray-50 rounded-xl p-4">
+            {/* Cabecera */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">{TIPO_ICON_ADMIN[p.tipo]}</span>
+              <div className="flex-1">
+                <p className="text-sm font-bold">{p.datos?.nombre || TIPO_LABEL_ADMIN[p.tipo]}</p>
+                <p className="text-xs text-gray-400">
+                  {p.usuario?.nombre} · {new Date(p.created_at).toLocaleDateString("es-ES")}
+                </p>
+              </div>
+              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                p.estado === "pendiente" ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+                : p.estado === "aprobado" ? "bg-green-50 text-green-700 border-green-200"
+                : "bg-red-50 text-red-600 border-red-200"
+              }`}>
+                {p.estado}
+              </span>
+            </div>
+
+            {/* Datos */}
+            <div className="bg-white rounded-lg p-3 text-xs space-y-1 mb-3">
+              {Object.entries(p.datos || {}).map(([k, v]) => {
+                if (!v || k === "color_principal") return null;
+                return (
+                  <div key={k} className="flex gap-2">
+                    <span className="text-gray-400 capitalize min-w-[100px]">{k.replace(/_/g, " ")}:</span>
+                    <span className="text-gray-700 font-medium">{v}</span>
+                  </div>
+                );
+              })}
+              {p.datos?.color_principal && (
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400 min-w-[100px]">Color:</span>
+                  <span className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: p.datos.color_principal }} />
+                  <span className="text-gray-700 font-medium">{p.datos.color_principal}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Acciones */}
+            {p.estado === "pendiente" && (
+              <>
+                {rechazando === p.id ? (
+                  <div className="space-y-2">
+                    <input
+                      value={notaRechazo}
+                      onChange={(e) => setNotaRechazo(e.target.value)}
+                      placeholder="Motivo del rechazo (opcional)"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => setRechazando(null)}
+                        className="flex-1 py-2 rounded-lg text-xs font-semibold border border-gray-200 text-gray-600">
+                        Cancelar
+                      </button>
+                      <button onClick={() => rechazar(p.id)}
+                        className="flex-1 py-2 rounded-lg text-xs font-semibold bg-red-500 text-white">
+                        Confirmar rechazo
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button onClick={() => { setRechazando(p.id); setNotaRechazo(""); }}
+                      className="flex-1 py-2 rounded-lg text-xs font-semibold border border-red-200 text-red-500">
+                      Rechazar
+                    </button>
+                    <button onClick={() => aprobar(p)}
+                      className="flex-1 py-2 rounded-lg text-xs font-semibold bg-[#1DB954] text-white">
+                      Aprobar y crear
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+            {p.estado === "rechazado" && p.notas_admin && (
+              <p className="text-xs text-red-500 bg-red-50 rounded-lg px-2 py-1">Motivo: {p.notas_admin}</p>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
