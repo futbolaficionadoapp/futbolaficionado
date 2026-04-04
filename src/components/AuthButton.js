@@ -29,13 +29,26 @@ export default function AuthButton() {
   if (loading) return null;
 
   if (user) {
+    const avatarUrl =
+      user.user_metadata?.avatar_url ||
+      user.user_metadata?.picture ||
+      null;
     return (
       <div className="flex items-center gap-2">
-        <Link
-          href="/perfil"
-          className="w-8 h-8 rounded-full bg-[#1DB954] text-white flex items-center justify-center text-xs font-bold"
-        >
-          {user.user_metadata?.nombre?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase()}
+        <Link href="/perfil">
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt="perfil"
+              className="w-8 h-8 rounded-full object-cover border border-white/20"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-[#1DB954] text-white flex items-center justify-center text-xs font-bold">
+              {user.user_metadata?.nombre?.[0]?.toUpperCase() ||
+                user.user_metadata?.full_name?.[0]?.toUpperCase() ||
+                user.email?.[0]?.toUpperCase()}
+            </div>
+          )}
         </Link>
       </div>
     );

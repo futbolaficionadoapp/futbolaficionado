@@ -3,6 +3,7 @@ import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 import RegisterSW from "@/components/RegisterSW";
 import OnboardingCheck from "@/components/OnboardingCheck";
+import SyncOAuthAvatar from "@/components/SyncOAuthAvatar";
 
 const nunito = Nunito({
   variable: "--font-nunito",
@@ -38,6 +39,7 @@ export default function RootLayout({ children }) {
     <html lang="es" className={`${nunito.variable} h-full`}>
       <body className="min-h-full flex flex-col bg-white text-gray-900 font-sans pb-16">
         <OnboardingCheck />
+        <SyncOAuthAvatar />
         <main className="flex-1">{children}</main>
         <BottomNav />
         <RegisterSW />

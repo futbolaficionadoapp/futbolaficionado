@@ -6,12 +6,18 @@ import Link from "next/link";
 
 export default function MasPage() {
   const [perfil, setPerfil] = useState(null);
+  const [oauthAvatar, setOauthAvatar] = useState(null);
   const supabase = createClient();
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        setOauthAvatar(
+          user.user_metadata?.avatar_url ||
+          user.user_metadata?.picture ||
+          null
+        );
         const { data } = await supabase
           .from("perfiles")
           .select("*")
@@ -33,13 +39,22 @@ export default function MasPage() {
             href="/perfil"
             className="flex items-center gap-3 py-3 border-b border-gray-100"
           >
-            <div className="w-8 h-8 rounded-full bg-[#1DB954] text-white flex items-center justify-center text-xs font-bold">
-              {perfil.nombre?.[0]?.toUpperCase()}
-            </div>
+            {(perfil.avatar_url || oauthAvatar) ? (
+              <img
+                src={perfil.avatar_url || oauthAvatar}
+                alt={perfil.nombre}
+                className="w-10 h-10 rounded-full object-cover border border-gray-100 shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-[#1DB954] text-white flex items-center justify-center text-sm font-bold shrink-0">
+                {perfil.nombre?.[0]?.toUpperCase()}
+              </div>
+            )}
             <div>
               <p className="text-sm font-semibold">{perfil.nombre}</p>
               <p className="text-xs text-gray-400">{perfil.email}</p>
             </div>
+            <span className="ml-auto text-gray-300 text-lg">›</span>
           </Link>
         )}
 
