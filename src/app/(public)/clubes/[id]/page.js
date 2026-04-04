@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase-server";
 import Link from "next/link";
 import SeguirClubButton from "@/components/SeguirClubButton";
 import SolicitarColaboradorButton from "@/components/SolicitarColaboradorButton";
+import AdminClubEditOverlay from "@/components/AdminClubEditOverlay";
 
 export default async function ClubPage({ params }) {
   const { id } = await params;
@@ -102,6 +103,9 @@ export default async function ClubPage({ params }) {
 
   return (
     <div className="max-w-lg mx-auto">
+      {/* Admin inline editing overlay */}
+      <AdminClubEditOverlay clubId={id} clubNombre={club.nombre} />
+
       {/* Cabecera con colores del club */}
       <header
         className="px-4 pt-4 pb-6 text-white"

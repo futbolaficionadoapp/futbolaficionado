@@ -1,11 +1,170 @@
 import { createClient } from "@/lib/supabase-server";
 import AuthButton from "@/components/AuthButton";
+import ClubHome from "@/components/ClubHome";
 import Link from "next/link";
-import MiEquipo from "@/components/MiEquipo";
 
 export default async function Home() {
   const supabase = await createClient();
 
+  // Get user + perfil server-side
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let perfil = null;
+  if (user) {
+    const { data } = await supabase
+      .from("perfiles")
+      .select("id, club_favorito_id, rol")
+      .eq("id", user.id)
+      .single();
+    perfil = data;
+  }
+
+  const clubId = perfil?.club_favorito_id;
+  const isAdmin = perfil?.rol === "admin";
+
+  // ---- Club selected: fetch all club data server-side ----
+  if (clubId) {
+    const [
+      { data: club },
+      { data: clasi },
+      { data: partidos },
+      { data: plantilla },
+      { data: golesEv },
+      { data: asistEv },
+      { count: seguidosCount },
+      { count: favoritosCount },
+    ] = await Promise.all([
+      supabase.from("clubs").select("*").eq("id", clubId).single(),
+
+      supabase
+        .from("clasificacion")
+        .select(
+          "*, grupo:grupos(id, liga:ligas(id, nombre, logo_url, categoria))"
+        )
+        .eq("club_id", clubId)
+        .maybeSingle(),
+
+      supabase
+        .from("partidos")
+        .select(
+          "*, local:clubs!partidos_local_id_fkey(id, nombre, escudo_url, color_principal), visitante:clubs!partidos_visitante_id_fkey(id, nombre, escudo_url, color_principal)"
+        )
+        .or(`local_id.eq.${clubId},visitante_id.eq.${clubId}`)
+        .order("fecha", { ascending: false })
+        .limit(30),
+
+      supabase
+        .from("jugador_club")
+        .select(
+          "dorsal, jugador:jugadores(id, nombre, apellidos, posicion)"
+        )
+        .eq("club_id", clubId)
+        .eq("activo", true)
+        .order("dorsal", { ascending: true }),
+
+      supabase
+        .from("eventos_partido")
+        .select("jugador_id, jugador:jugadores(id, nombre, apellidos)")
+        .eq("equipo_id", clubId)
+        .eq("tipo", "gol"),
+
+      supabase
+        .from("eventos_partido")
+        .select("jugador_id, jugador:jugadores(id, nombre, apellidos)")
+        .eq("equipo_id", clubId)
+        .eq("tipo", "asistencia"),
+
+      supabase
+        .from("equipos_seguidos")
+        .select("*", { count: "exact", head: true })
+        .eq("club_id", clubId),
+
+      supabase
+        .from("perfiles")
+        .select("*", { count: "exact", head: true })
+        .eq("club_favorito_id", clubId),
+    ]);
+
+    let tabla = [];
+    let jornadaPartidos = [];
+
+    if (clasi?.grupo_id) {
+      const [{ data: tablaData }, { data: jornadaData }] = await Promise.all([
+        supabase
+          .from("clasificacion")
+          .select(
+            "*, club:clubs(id, nombre, escudo_url, color_principal)"
+          )
+          .eq("grupo_id", clasi.grupo_id)
+          .order("puntos", { ascending: false }),
+
+        supabase
+          .from("partidos")
+          .select(
+            "*, local:clubs!partidos_local_id_fkey(id, nombre, escudo_url, color_principal), visitante:clubs!partidos_visitante_id_fkey(id, nombre, escudo_url, color_principal)"
+          )
+          .eq("grupo_id", clasi.grupo_id)
+          .order("jornada", { ascending: false })
+          .limit(60),
+      ]);
+      tabla = tablaData || [];
+      jornadaPartidos = jornadaData || [];
+    }
+
+    if (!club) {
+      // Club was deleted or inaccessible — fall through to generic home
+    } else {
+      return (
+        <div className="max-w-lg mx-auto">
+          {/* Header */}
+          <header className="px-4 py-4 flex items-center justify-between border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-extrabold tracking-tight">
+                <span className="text-[#1a2744]">FÚTBOL</span>
+                <span className="text-[#1DB954]"> AFICIONADO</span>
+              </h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <AuthButton />
+            </div>
+          </header>
+
+          {/* Buscador */}
+          <div className="px-4 py-3">
+            <Link href="/buscar" className="block">
+              <div className="relative">
+                <div className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-400">
+                  Buscar clubes o jugadores...
+                </div>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  🔍
+                </span>
+              </div>
+            </Link>
+          </div>
+
+          {/* Full club dashboard */}
+          <ClubHome
+            club={club}
+            perfil={perfil}
+            clasi={clasi}
+            tabla={tabla}
+            partidos={partidos || []}
+            jornadaPartidos={jornadaPartidos}
+            plantilla={plantilla || []}
+            golesEv={golesEv || []}
+            asistEv={asistEv || []}
+            seguidores={(seguidosCount || 0) + (favoritosCount || 0)}
+            isAdmin={isAdmin}
+          />
+        </div>
+      );
+    }
+  }
+
+  // ---- Generic home (no club selected) ----
   const hoy = new Date().toISOString().split("T")[0];
 
   const [
@@ -86,9 +245,6 @@ export default async function Home() {
           </div>
         </Link>
       </div>
-
-      {/* Mi equipo */}
-      <MiEquipo />
 
       {/* Pills de categorías */}
       <div className="px-4 pb-3 flex gap-2 overflow-x-auto no-scrollbar">
@@ -180,7 +336,7 @@ export default async function Home() {
             Goleadores
           </h2>
           <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
-            {topGoleadores.map((g, i) => (
+            {topGoleadores.map((g) => (
               <Link
                 key={g.id}
                 href={`/jugadores/${g.id}`}
@@ -280,7 +436,11 @@ function ProximosPartidos({ partidos, hoy }) {
 
           return (
             <div key={fecha}>
-              <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${esHoy ? "text-[#1DB954]" : "text-gray-400"}`}>
+              <p
+                className={`text-xs font-bold uppercase tracking-wider mb-2 ${
+                  esHoy ? "text-[#1DB954]" : "text-gray-400"
+                }`}
+              >
                 {labelFecha}
               </p>
               <div className="space-y-2">
@@ -288,7 +448,9 @@ function ProximosPartidos({ partidos, hoy }) {
                   <div
                     key={partido.id}
                     className={`bg-gray-50 rounded-xl p-3 flex items-center gap-3 ${
-                      partido.estado === "en_vivo" ? "ring-1 ring-red-200 bg-red-50/30" : ""
+                      partido.estado === "en_vivo"
+                        ? "ring-1 ring-red-200 bg-red-50/30"
+                        : ""
                     }`}
                   >
                     <div className="flex-1 space-y-1.5">
@@ -297,14 +459,18 @@ function ProximosPartidos({ partidos, hoy }) {
                         <Link
                           href={`/clubes/${partido.local?.id}`}
                           className={`text-sm font-semibold hover:underline ${
-                            partido.estado === "finalizado" && partido.goles_local > partido.goles_visitante
-                              ? "text-[#1DB954]" : ""
+                            partido.estado === "finalizado" &&
+                            partido.goles_local > partido.goles_visitante
+                              ? "text-[#1DB954]"
+                              : ""
                           }`}
                         >
                           {partido.local?.nombre}
                         </Link>
                         <span className="ml-auto font-bold text-sm tabular-nums">
-                          {partido.estado !== "programado" ? partido.goles_local : ""}
+                          {partido.estado !== "programado"
+                            ? partido.goles_local
+                            : ""}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -312,22 +478,30 @@ function ProximosPartidos({ partidos, hoy }) {
                         <Link
                           href={`/clubes/${partido.visitante?.id}`}
                           className={`text-sm font-semibold hover:underline ${
-                            partido.estado === "finalizado" && partido.goles_visitante > partido.goles_local
-                              ? "text-[#1DB954]" : ""
+                            partido.estado === "finalizado" &&
+                            partido.goles_visitante > partido.goles_local
+                              ? "text-[#1DB954]"
+                              : ""
                           }`}
                         >
                           {partido.visitante?.nombre}
                         </Link>
                         <span className="ml-auto font-bold text-sm tabular-nums">
-                          {partido.estado !== "programado" ? partido.goles_visitante : ""}
+                          {partido.estado !== "programado"
+                            ? partido.goles_visitante
+                            : ""}
                         </span>
                       </div>
                     </div>
                     <div className="text-center min-w-[48px]">
                       {partido.estado === "en_vivo" ? (
-                        <span className="text-xs font-bold text-red-500 animate-pulse">En vivo</span>
+                        <span className="text-xs font-bold text-red-500 animate-pulse">
+                          En vivo
+                        </span>
                       ) : partido.estado === "finalizado" ? (
-                        <span className="text-[10px] font-semibold text-gray-400 uppercase">Final</span>
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase">
+                          Final
+                        </span>
                       ) : (
                         <span className="text-xs font-semibold text-gray-500">
                           {partido.hora?.slice(0, 5)}
