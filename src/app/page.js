@@ -63,9 +63,9 @@ export default async function Home() {
       {/* Header */}
       <header className="px-4 py-4 flex items-center justify-between border-b border-gray-100">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">⚽</span>
           <h1 className="text-lg font-extrabold tracking-tight">
-            <span className="text-[#1DB954]">Fútbol</span>Aficionado
+            <span className="text-[#1a2744]">FÚTBOL</span>
+            <span className="text-[#1DB954]"> AFICIONADO</span>
           </h1>
         </div>
         <div className="flex items-center gap-2">

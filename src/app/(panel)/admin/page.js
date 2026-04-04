@@ -49,6 +49,7 @@ export default function AdminPage() {
     { id: "categorias", label: "Categorias" },
     { id: "equipos", label: "Equipos" },
     { id: "jugadores", label: "Jugadores" },
+    { id: "partidos", label: "Partidos" },
     { id: "colaboradores", label: "Colaboradores" },
     { id: "peticiones", label: "Peticiones" },
     ...(perfil.is_ceo ? [{ id: "admins", label: "⚙ Admins" }] : []),
@@ -81,6 +82,7 @@ export default function AdminPage() {
         {tab === "categorias" && <CategoriasTab supabase={supabase} />}
         {tab === "equipos" && <EquiposTab supabase={supabase} />}
         {tab === "jugadores" && <JugadoresTab supabase={supabase} />}
+        {tab === "partidos" && <PartidosAdminTab supabase={supabase} />}
         {tab === "colaboradores" && <ColaboradoresTab supabase={supabase} />}
         {tab === "peticiones" && <PeticionesAdminTab supabase={supabase} adminId={perfil.id} />}
         {tab === "admins" && perfil.is_ceo && <AdminsTab supabase={supabase} ceoId={perfil.id} />}
@@ -1572,6 +1574,399 @@ function AdminsTab({ supabase, ceoId }) {
         ))}
         {resto.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-2">No hay más usuarios</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ===================== PARTIDOS ADMIN ===================== */
+
+function PartidosAdminTab({ supabase }) {
+  const [partidos, setPartidos] = useState([]);
+  const [ligas, setLigas] = useState([]);
+  const [ligaFiltro, setLigaFiltro] = useState("");
+  const [estadoFiltro, setEstadoFiltro] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [editando, setEditando] = useState(null); // partido seleccionado
+
+  const load = useCallback(async () => {
+    const [{ data: ps }, { data: ls }] = await Promise.all([
+      supabase
+        .from("partidos")
+        .select("*, local:clubs!partidos_local_id_fkey(id, nombre, escudo_url, color_principal), visitante:clubs!partidos_visitante_id_fkey(id, nombre, escudo_url, color_principal), grupo:grupos(id, nombre, liga:ligas(id, nombre))")
+        .order("fecha", { ascending: false })
+        .order("hora", { ascending: true })
+        .limit(100),
+      supabase.from("ligas").select("id, nombre").eq("activa", true).order("nombre"),
+    ]);
+    setPartidos(ps || []);
+    setLigas(ls || []);
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtrados = partidos.filter((p) => {
+    if (ligaFiltro && p.grupo?.liga?.id !== ligaFiltro) return false;
+    if (estadoFiltro && p.estado !== estadoFiltro) return false;
+    return true;
+  });
+
+  if (editando) {
+    return (
+      <PartidoEditor
+        partido={editando}
+        supabase={supabase}
+        onBack={() => { setEditando(null); load(); }}
+      />
+    );
+  }
+
+  if (loading) return <p className="text-gray-400 text-sm">Cargando...</p>;
+
+  return (
+    <div>
+      {/* Filtros */}
+      <div className="flex gap-2 mb-4">
+        <select
+          value={ligaFiltro}
+          onChange={(e) => setLigaFiltro(e.target.value)}
+          className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-xs bg-white focus:outline-none"
+        >
+          <option value="">Todas las competiciones</option>
+          {ligas.map((l) => (
+            <option key={l.id} value={l.id}>{l.nombre}</option>
+          ))}
+        </select>
+        <select
+          value={estadoFiltro}
+          onChange={(e) => setEstadoFiltro(e.target.value)}
+          className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-xs bg-white focus:outline-none"
+        >
+          <option value="">Todos los estados</option>
+          <option value="programado">Programado</option>
+          <option value="en_vivo">En vivo</option>
+          <option value="finalizado">Finalizado</option>
+        </select>
+      </div>
+
+      <p className="text-xs text-gray-400 mb-3">{filtrados.length} partido(s)</p>
+
+      <div className="space-y-2">
+        {filtrados.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setEditando(p)}
+            className="w-full bg-gray-50 rounded-xl p-3 text-left hover:bg-gray-100 transition-colors"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-gray-400">{p.fecha} {p.hora?.slice(0, 5)}</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                p.estado === "en_vivo" ? "bg-red-100 text-red-600" :
+                p.estado === "finalizado" ? "bg-gray-200 text-gray-500" :
+                "bg-blue-50 text-blue-500"
+              }`}>
+                {p.estado === "en_vivo" ? "En vivo" : p.estado === "finalizado" ? "Final" : "Programado"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm flex-1 truncate">{p.local?.nombre}</span>
+              <span className="font-bold text-sm tabular-nums shrink-0">
+                {p.estado !== "programado" ? `${p.goles_local ?? 0} - ${p.goles_visitante ?? 0}` : "vs"}
+              </span>
+              <span className="font-semibold text-sm flex-1 text-right truncate">{p.visitante?.nombre}</span>
+            </div>
+            {p.grupo?.liga && (
+              <p className="text-[10px] text-gray-400 mt-0.5">{p.grupo.liga.nombre}</p>
+            )}
+          </button>
+        ))}
+        {filtrados.length === 0 && (
+          <p className="text-center text-gray-400 text-sm py-8">No hay partidos</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PartidoEditor({ partido, supabase, onBack }) {
+  const [estado, setEstado] = useState(partido.estado || "programado");
+  const [golesLocal, setGolesLocal] = useState(partido.goles_local ?? 0);
+  const [golesVisitante, setGolesVisitante] = useState(partido.goles_visitante ?? 0);
+  const [eventos, setEventos] = useState([]);
+  const [jugadoresLocal, setJugadoresLocal] = useState([]);
+  const [jugadoresVisitante, setJugadoresVisitante] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [minuto, setMinuto] = useState(partido.minuto_actual || 0);
+  const [timerActivo, setTimerActivo] = useState(false);
+  const [showFormEvento, setShowFormEvento] = useState(false);
+  const [formEvento, setFormEvento] = useState({ tipo: "gol", equipo_id: partido.local?.id || "", jugador_id: "", minuto: "" });
+
+  useEffect(() => {
+    async function loadData() {
+      const [{ data: evs }, { data: jl }, { data: jv }] = await Promise.all([
+        supabase
+          .from("eventos_partido")
+          .select("*, jugador:jugadores(id, nombre, apellidos), equipo:clubs(id, nombre)")
+          .eq("partido_id", partido.id)
+          .order("minuto", { ascending: true }),
+        supabase
+          .from("jugador_club")
+          .select("jugador:jugadores(id, nombre, apellidos)")
+          .eq("club_id", partido.local?.id)
+          .eq("activo", true),
+        supabase
+          .from("jugador_club")
+          .select("jugador:jugadores(id, nombre, apellidos)")
+          .eq("club_id", partido.visitante?.id)
+          .eq("activo", true),
+      ]);
+      setEventos(evs || []);
+      setJugadoresLocal((jl || []).map((j) => j.jugador).filter(Boolean));
+      setJugadoresVisitante((jv || []).map((j) => j.jugador).filter(Boolean));
+      setLoading(false);
+    }
+    loadData();
+  }, [partido.id]);
+
+  // Timer automático para partidos en vivo
+  useEffect(() => {
+    if (!timerActivo) return;
+    const interval = setInterval(() => {
+      setMinuto((m) => m + 1);
+    }, 60000); // cada minuto real
+    return () => clearInterval(interval);
+  }, [timerActivo]);
+
+  async function guardarEstado() {
+    setGuardando(true);
+    await supabase
+      .from("partidos")
+      .update({ estado, goles_local: golesLocal, goles_visitante: golesVisitante, minuto_actual: minuto })
+      .eq("id", partido.id);
+    setGuardando(false);
+  }
+
+  async function addEvento() {
+    if (!formEvento.tipo || !formEvento.equipo_id) return;
+    const { data } = await supabase
+      .from("eventos_partido")
+      .insert({
+        partido_id: partido.id,
+        tipo: formEvento.tipo,
+        equipo_id: formEvento.equipo_id,
+        jugador_id: formEvento.jugador_id || null,
+        minuto: formEvento.minuto ? parseInt(formEvento.minuto) : null,
+      })
+      .select("*, jugador:jugadores(id, nombre, apellidos), equipo:clubs(id, nombre)")
+      .single();
+    if (data) {
+      setEventos((prev) => [...prev, data].sort((a, b) => (a.minuto || 0) - (b.minuto || 0)));
+      // Si es gol, actualizar contador
+      if (formEvento.tipo === "gol") {
+        if (formEvento.equipo_id === partido.local?.id) setGolesLocal((g) => g + 1);
+        else setGolesVisitante((g) => g + 1);
+      }
+    }
+    setShowFormEvento(false);
+    setFormEvento({ tipo: "gol", equipo_id: partido.local?.id || "", jugador_id: "", minuto: "" });
+  }
+
+  async function deleteEvento(eventoId, tipo, equipoId) {
+    await supabase.from("eventos_partido").delete().eq("id", eventoId);
+    setEventos((prev) => prev.filter((e) => e.id !== eventoId));
+    if (tipo === "gol") {
+      if (equipoId === partido.local?.id) setGolesLocal((g) => Math.max(0, g - 1));
+      else setGolesVisitante((g) => Math.max(0, g - 1));
+    }
+  }
+
+  const jugadoresEquipoSeleccionado =
+    formEvento.equipo_id === partido.local?.id ? jugadoresLocal : jugadoresVisitante;
+
+  const tipoLabel = { gol: "⚽ Gol", asistencia: "🅰️ Asistencia", tarjeta_amarilla: "🟨 Amarilla", tarjeta_roja: "🟥 Roja" };
+
+  if (loading) return <p className="text-gray-400 text-sm">Cargando...</p>;
+
+  return (
+    <div>
+      <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 font-semibold mb-4 hover:text-gray-700">
+        ← Volver
+      </button>
+
+      {/* Marcador */}
+      <div className="bg-gray-50 rounded-2xl p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+            estado === "en_vivo" ? "bg-red-100 text-red-600" :
+            estado === "finalizado" ? "bg-gray-200 text-gray-600" :
+            "bg-blue-50 text-blue-500"
+          }`}>
+            {estado === "en_vivo" ? "En vivo" : estado === "finalizado" ? "Finalizado" : "Programado"}
+          </span>
+          {estado === "en_vivo" && (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={minuto}
+                onChange={(e) => setMinuto(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-14 border border-gray-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none"
+                min="0"
+                max="120"
+              />
+              <span className="text-xs text-gray-400">min</span>
+              <button
+                onClick={() => setTimerActivo(!timerActivo)}
+                className={`text-xs font-bold px-2 py-1 rounded-lg ${timerActivo ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"}`}
+              >
+                {timerActivo ? "⏸ Pausar" : "▶ Auto"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4 mb-4">
+          <div className="flex-1 text-center">
+            <p className="text-xs text-gray-400 mb-1 truncate">{partido.local?.nombre}</p>
+            <div className="flex items-center justify-center gap-1">
+              <button onClick={() => setGolesLocal((g) => Math.max(0, g - 1))} className="w-6 h-6 rounded-full bg-gray-200 text-gray-600 font-bold text-sm flex items-center justify-center">−</button>
+              <span className="text-3xl font-extrabold w-10 text-center tabular-nums">{golesLocal}</span>
+              <button onClick={() => setGolesLocal((g) => g + 1)} className="w-6 h-6 rounded-full bg-[#1DB954]/20 text-[#1DB954] font-bold text-sm flex items-center justify-center">+</button>
+            </div>
+          </div>
+          <span className="text-gray-300 text-2xl font-light">—</span>
+          <div className="flex-1 text-center">
+            <p className="text-xs text-gray-400 mb-1 truncate">{partido.visitante?.nombre}</p>
+            <div className="flex items-center justify-center gap-1">
+              <button onClick={() => setGolesVisitante((g) => Math.max(0, g - 1))} className="w-6 h-6 rounded-full bg-gray-200 text-gray-600 font-bold text-sm flex items-center justify-center">−</button>
+              <span className="text-3xl font-extrabold w-10 text-center tabular-nums">{golesVisitante}</span>
+              <button onClick={() => setGolesVisitante((g) => g + 1)} className="w-6 h-6 rounded-full bg-[#1DB954]/20 text-[#1DB954] font-bold text-sm flex items-center justify-center">+</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Estado */}
+        <div className="flex gap-2 mb-3">
+          {["programado", "en_vivo", "finalizado"].map((s) => (
+            <button
+              key={s}
+              onClick={() => {
+                setEstado(s);
+                if (s === "en_vivo" && minuto === 0) setMinuto(1);
+                if (s !== "en_vivo") setTimerActivo(false);
+              }}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                estado === s
+                  ? s === "en_vivo" ? "bg-red-500 text-white" : s === "finalizado" ? "bg-gray-600 text-white" : "bg-blue-500 text-white"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              {s === "en_vivo" ? "En vivo" : s === "finalizado" ? "Final" : "Progr."}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={guardarEstado}
+          disabled={guardando}
+          className="w-full py-2 rounded-xl text-sm font-semibold bg-[#1DB954] text-white disabled:opacity-50"
+        >
+          {guardando ? "Guardando..." : "Guardar marcador"}
+        </button>
+      </div>
+
+      {/* Eventos */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-bold text-gray-700">Eventos ({eventos.length})</h3>
+          <button
+            onClick={() => setShowFormEvento(!showFormEvento)}
+            className="text-xs font-bold text-[#1DB954]"
+          >
+            {showFormEvento ? "Cancelar" : "+ Añadir"}
+          </button>
+        </div>
+
+        {showFormEvento && (
+          <div className="bg-white border border-gray-200 rounded-xl p-3 mb-3 space-y-2">
+            <Row>
+              <Select
+                label="Tipo"
+                value={formEvento.tipo}
+                onChange={(v) => setFormEvento({ ...formEvento, tipo: v })}
+                options={[
+                  { value: "gol", label: "⚽ Gol" },
+                  { value: "asistencia", label: "🅰️ Asistencia" },
+                  { value: "tarjeta_amarilla", label: "🟨 Amarilla" },
+                  { value: "tarjeta_roja", label: "🟥 Roja" },
+                ]}
+              />
+              <Input
+                label="Minuto"
+                type="number"
+                value={formEvento.minuto}
+                onChange={(v) => setFormEvento({ ...formEvento, minuto: v })}
+                placeholder="ej: 23"
+              />
+            </Row>
+            <Select
+              label="Equipo"
+              value={formEvento.equipo_id}
+              onChange={(v) => setFormEvento({ ...formEvento, equipo_id: v, jugador_id: "" })}
+              options={[
+                { value: partido.local?.id || "", label: partido.local?.nombre || "Local" },
+                { value: partido.visitante?.id || "", label: partido.visitante?.nombre || "Visitante" },
+              ]}
+            />
+            <div className="flex-1">
+              <label className="text-xs text-gray-500 mb-1 block">Jugador (opcional)</label>
+              <select
+                value={formEvento.jugador_id}
+                onChange={(e) => setFormEvento({ ...formEvento, jugador_id: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1DB954]/30 bg-white"
+              >
+                <option value="">Sin jugador</option>
+                {jugadoresEquipoSeleccionado.map((j) => (
+                  <option key={j.id} value={j.id}>{j.nombre} {j.apellidos}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={addEvento}
+              className="w-full py-2 rounded-xl text-sm font-semibold bg-[#1DB954] text-white"
+            >
+              Añadir evento
+            </button>
+          </div>
+        )}
+
+        {eventos.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-4">Sin eventos registrados</p>
+        ) : (
+          <div className="space-y-1.5">
+            {eventos.map((ev) => (
+              <div key={ev.id} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                <span className="text-sm shrink-0">
+                  {ev.tipo === "gol" ? "⚽" : ev.tipo === "asistencia" ? "🅰️" : ev.tipo === "tarjeta_amarilla" ? "🟨" : "🟥"}
+                </span>
+                <span className="text-xs text-gray-400 w-8 shrink-0">{ev.minuto ? `${ev.minuto}'` : "—"}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold truncate">
+                    {ev.jugador ? `${ev.jugador.nombre} ${ev.jugador.apellidos || ""}` : ev.equipo?.nombre || "—"}
+                  </p>
+                  {ev.jugador && <p className="text-[10px] text-gray-400 truncate">{ev.equipo?.nombre}</p>}
+                </div>
+                <button
+                  onClick={() => deleteEvento(ev.id, ev.tipo, ev.equipo_id)}
+                  className="text-red-400 text-xs font-bold shrink-0 hover:text-red-600"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

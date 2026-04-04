@@ -281,7 +281,7 @@ export default function PerfilPage() {
       </div>
 
       {/* Sección colaborador */}
-      {perfil.rol === "visitante" && (
+      {(perfil.rol === "visitante" || !perfil.rol) && perfil.rol !== "admin" && perfil.rol !== "colaborador" && (
         <ColaboradorSection
           userId={authUser?.id}
           clubId={perfil.club_favorito_id}
