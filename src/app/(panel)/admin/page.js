@@ -213,7 +213,7 @@ function CategoriasTab({ supabase }) {
             value={form.logo_url}
             onChange={(v) => setForm({ ...form, logo_url: v })}
             bucket="escudos"
-            path={`ligas/${form.nombre?.toLowerCase().replace(/\s+/g, "-") || "liga"}`}
+            path={`ligas/${sanitizePath(form.nombre) || "liga"}`}
             supabase={supabase}
           />
         </FormCard>
@@ -272,6 +272,9 @@ function CategoriaDetalle({ supabase, liga, onBack }) {
   const [buscar, setBuscar] = useState("");
   const [showBuscador, setShowBuscador] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [creandoEquipo, setCreandoEquipo] = useState(false);
+  const [formNuevoClub, setFormNuevoClub] = useState({ nombre: "", provincia: "", municipio: "", color_principal: "#1DB954" });
+  const [savingClub, setSavingClub] = useState(false);
 
   const load = useCallback(async () => {
     const { data: grupos } = await supabase
@@ -313,6 +316,22 @@ function CategoriaDetalle({ supabase, liga, onBack }) {
   async function removeClub(clId) {
     await supabase.from("club_liga").delete().eq("id", clId);
     load();
+  }
+
+  async function crearYAniadirEquipo() {
+    if (!formNuevoClub.nombre) return;
+    setSavingClub(true);
+    const { data: club } = await supabase.from("clubs").insert({
+      nombre: formNuevoClub.nombre,
+      provincia: formNuevoClub.provincia || liga.provincia || "",
+      municipio: formNuevoClub.municipio,
+      comunidad_autonoma: liga.comunidad_autonoma || "",
+      color_principal: formNuevoClub.color_principal,
+    }).select().single();
+    if (club) await addClub(club.id);
+    setCreandoEquipo(false);
+    setFormNuevoClub({ nombre: "", provincia: "", municipio: "", color_principal: "#1DB954" });
+    setSavingClub(false);
   }
 
   const clubIdsEnLiga = new Set(clubsEnLiga.map((c) => c.club_id));
@@ -361,11 +380,45 @@ function CategoriaDetalle({ supabase, liga, onBack }) {
                 <span className="text-xs text-gray-400 ml-2">{c.municipio}</span>
               </button>
             ))}
-            {clubsFiltrados.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-2">
-                No se encontraron equipos
-              </p>
+            {clubsFiltrados.length === 0 && buscar && !creandoEquipo && (
+              <div className="border-t border-gray-100 pt-2 mt-1">
+                <p className="text-xs text-gray-400 mb-1">No existe en la base de datos</p>
+                <button
+                  onClick={() => { setCreandoEquipo(true); setFormNuevoClub((f) => ({ ...f, nombre: buscar })); }}
+                  className="w-full text-xs font-semibold text-[#1DB954] py-2 rounded-lg hover:bg-[#1DB954]/5"
+                >
+                  + Crear equipo &ldquo;{buscar}&rdquo;
+                </button>
+              </div>
             )}
+            {clubsFiltrados.length === 0 && !buscar && (
+              <p className="text-xs text-gray-400 text-center py-2">Escribe para buscar</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {creandoEquipo && (
+        <div className="bg-white border border-[#1DB954]/30 rounded-xl p-4 mb-3 space-y-3">
+          <h4 className="text-sm font-bold text-gray-800">Crear nuevo equipo</h4>
+          <Input label="Nombre *" value={formNuevoClub.nombre} onChange={(v) => setFormNuevoClub({ ...formNuevoClub, nombre: v })} />
+          <Row>
+            <Input label="Municipio" value={formNuevoClub.municipio} onChange={(v) => setFormNuevoClub({ ...formNuevoClub, municipio: v })} />
+            <Input label="Provincia" value={formNuevoClub.provincia} onChange={(v) => setFormNuevoClub({ ...formNuevoClub, provincia: v })} placeholder={liga.provincia || ""} />
+          </Row>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-500">Color:</label>
+            <input type="color" value={formNuevoClub.color_principal}
+              onChange={(e) => setFormNuevoClub({ ...formNuevoClub, color_principal: e.target.value })}
+              className="w-8 h-8 rounded border-0 cursor-pointer"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setCreandoEquipo(false)} className="flex-1 py-2 rounded-lg text-xs font-semibold border border-gray-200 text-gray-600">Cancelar</button>
+            <button onClick={crearYAniadirEquipo} disabled={!formNuevoClub.nombre || savingClub}
+              className="flex-1 py-2 rounded-lg text-xs font-semibold bg-[#1DB954] text-white disabled:opacity-50">
+              {savingClub ? "Creando..." : "Crear y añadir"}
+            </button>
           </div>
         </div>
       )}
@@ -529,7 +582,7 @@ function EquiposTab({ supabase }) {
             value={form.escudo_url}
             onChange={(v) => setForm({ ...form, escudo_url: v })}
             bucket="escudos"
-            path={`clubs/${form.nombre?.toLowerCase().replace(/\s+/g, "-") || "club"}`}
+            path={`clubs/${sanitizePath(form.nombre) || "club"}`}
             supabase={supabase}
           />
           <Row>
@@ -538,7 +591,7 @@ function EquiposTab({ supabase }) {
               value={form.equipacion_local_url}
               onChange={(v) => setForm({ ...form, equipacion_local_url: v })}
               bucket="escudos"
-              path={`equipaciones/${form.nombre?.toLowerCase().replace(/\s+/g, "-") || "club"}-local`}
+              path={`equipaciones/${sanitizePath(form.nombre) || "club"}-local`}
               supabase={supabase}
             />
             <ImageUpload
@@ -546,7 +599,7 @@ function EquiposTab({ supabase }) {
               value={form.equipacion_visitante_url}
               onChange={(v) => setForm({ ...form, equipacion_visitante_url: v })}
               bucket="escudos"
-              path={`equipaciones/${form.nombre?.toLowerCase().replace(/\s+/g, "-") || "club"}-visitante`}
+              path={`equipaciones/${sanitizePath(form.nombre) || "club"}-visitante`}
               supabase={supabase}
             />
           </Row>
@@ -614,17 +667,27 @@ function EquipoDetalle({ supabase, club, onBack }) {
   const [buscar, setBuscar] = useState("");
   const [showBuscador, setShowBuscador] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Competiciones
+  const [ligasDelClub, setLigasDelClub] = useState([]);
+  const [todasLigas, setTodasLigas] = useState([]);
+  const [showLigas, setShowLigas] = useState(false);
+  const [buscarLiga, setBuscarLiga] = useState("");
+  // Crear jugador rápido
+  const [creandoJugador, setCreandoJugador] = useState(false);
+  const [formJugador, setFormJugador] = useState({ nombre: "", apellidos: "", posicion: "MED" });
+  const [savingJugador, setSavingJugador] = useState(false);
 
   const load = useCallback(async () => {
-    const { data: jc } = await supabase
-      .from("jugador_club")
-      .select("*, jugador:jugadores(*)")
-      .eq("club_id", club.id)
-      .eq("activo", true);
+    const [{ data: jc }, { data: all }, { data: cl }, { data: ligas }] = await Promise.all([
+      supabase.from("jugador_club").select("*, jugador:jugadores(*)").eq("club_id", club.id).eq("activo", true),
+      supabase.from("jugadores").select("*").order("nombre"),
+      supabase.from("club_liga").select("*, grupo:grupos(id, liga:ligas(id, nombre, categoria))").eq("club_id", club.id),
+      supabase.from("ligas").select("id, nombre, categoria, grupos(id)").eq("activa", true).order("nombre"),
+    ]);
     setJugadores(jc || []);
-
-    const { data: all } = await supabase.from("jugadores").select("*").order("nombre");
     setTodosJugadores(all || []);
+    setLigasDelClub(cl || []);
+    setTodasLigas(ligas || []);
     setLoading(false);
   }, [supabase, club.id]);
 
@@ -648,6 +711,33 @@ function EquipoDetalle({ supabase, club, onBack }) {
   async function removeJugador(jcId) {
     await supabase.from("jugador_club").update({ activo: false }).eq("id", jcId);
     load();
+  }
+
+  async function addALiga(grupoId) {
+    const { data: temp } = await supabase.from("temporadas").select("id").limit(1).single();
+    await supabase.from("club_liga").insert({ club_id: club.id, grupo_id: grupoId, temporada_id: temp?.id });
+    setShowLigas(false);
+    setBuscarLiga("");
+    load();
+  }
+
+  async function quitarDeLiga(clId) {
+    await supabase.from("club_liga").delete().eq("id", clId);
+    load();
+  }
+
+  async function crearJugadorRapido() {
+    if (!formJugador.nombre) return;
+    setSavingJugador(true);
+    const { data: j } = await supabase.from("jugadores").insert({
+      nombre: formJugador.nombre,
+      apellidos: formJugador.apellidos,
+      posicion: formJugador.posicion,
+    }).select().single();
+    if (j) await addJugador(j.id);
+    setCreandoJugador(false);
+    setFormJugador({ nombre: "", apellidos: "", posicion: "MED" });
+    setSavingJugador(false);
   }
 
   async function updateDorsal(jcId, dorsal) {
@@ -690,11 +780,54 @@ function EquipoDetalle({ supabase, club, onBack }) {
         </div>
       </div>
 
+      {/* Competiciones del equipo */}
+      <div className="mb-4">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Competiciones</p>
+        {ligasDelClub.length > 0 && (
+          <div className="space-y-1 mb-2">
+            {ligasDelClub.map((cl) => (
+              <div key={cl.id} className="flex items-center gap-2 bg-blue-50 rounded-lg px-3 py-2">
+                <span className="text-xs font-semibold flex-1 text-blue-700">{cl.grupo?.liga?.nombre}</span>
+                <BtnSmall label="Quitar" color="red" onClick={() => quitarDeLiga(cl.id)} />
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={() => setShowLigas(!showLigas)}
+          className="w-full py-2 rounded-xl text-xs font-semibold border-2 border-dashed border-gray-200 text-gray-400 hover:border-blue-400 hover:text-blue-400 transition-colors">
+          + Añadir a competición
+        </button>
+        {showLigas && (
+          <div className="bg-white border border-gray-200 rounded-xl p-3 mt-2">
+            <input value={buscarLiga} onChange={(e) => setBuscarLiga(e.target.value)}
+              placeholder="Buscar competición..." autoFocus
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-[#1DB954]/30"
+            />
+            <div className="max-h-40 overflow-y-auto space-y-1">
+              {todasLigas
+                .filter((l) => !ligasDelClub.some((cl) => cl.grupo?.liga?.id === l.id))
+                .filter((l) => l.nombre.toLowerCase().includes(buscarLiga.toLowerCase()))
+                .slice(0, 10)
+                .map((l) => (
+                  <button key={l.id} onClick={() => addALiga(l.grupos?.[0]?.id)}
+                    className="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-[#1DB954]/10">
+                    {l.nombre}
+                    <span className="text-xs text-gray-400 ml-2">{l.categoria}</span>
+                  </button>
+                ))}
+              {todasLigas.filter((l) => l.nombre.toLowerCase().includes(buscarLiga.toLowerCase())).length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-2">No se encontraron competiciones</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       <button
         onClick={() => setShowBuscador(!showBuscador)}
         className="w-full mb-3 py-2 rounded-xl text-sm font-semibold border-2 border-dashed border-gray-200 text-gray-400 hover:border-[#1DB954] hover:text-[#1DB954] transition-colors"
       >
-        + Añadir jugador
+        + Añadir jugador existente
       </button>
 
       {showBuscador && (
@@ -717,11 +850,38 @@ function EquipoDetalle({ supabase, club, onBack }) {
                 <span className="text-xs text-gray-400 ml-2">{j.posicion}</span>
               </button>
             ))}
-            {jugsFiltrados.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-2">
-                No se encontraron jugadores
-              </p>
+            {jugsFiltrados.length === 0 && buscar && !creandoJugador && (
+              <div className="border-t border-gray-100 pt-2 mt-1">
+                <p className="text-xs text-gray-400 mb-1">No existe en la base de datos</p>
+                <button onClick={() => { setCreandoJugador(true); setFormJugador((f) => ({ ...f, nombre: buscar.split(" ")[0], apellidos: buscar.split(" ").slice(1).join(" ") })); }}
+                  className="w-full text-xs font-semibold text-[#1DB954] py-2 rounded-lg hover:bg-[#1DB954]/5">
+                  + Crear jugador &ldquo;{buscar}&rdquo;
+                </button>
+              </div>
             )}
+            {jugsFiltrados.length === 0 && !buscar && (
+              <p className="text-xs text-gray-400 text-center py-2">Escribe para buscar</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {creandoJugador && (
+        <div className="bg-white border border-[#1DB954]/30 rounded-xl p-4 mb-3 space-y-3">
+          <h4 className="text-sm font-bold text-gray-800">Crear nuevo jugador</h4>
+          <Row>
+            <Input label="Nombre *" value={formJugador.nombre} onChange={(v) => setFormJugador({ ...formJugador, nombre: v })} />
+            <Input label="Apellidos" value={formJugador.apellidos} onChange={(v) => setFormJugador({ ...formJugador, apellidos: v })} />
+          </Row>
+          <Select label="Posición" value={formJugador.posicion} onChange={(v) => setFormJugador({ ...formJugador, posicion: v })}
+            options={[{ value: "POR", label: "Portero" }, { value: "DEF", label: "Defensa" }, { value: "MED", label: "Centrocampista" }, { value: "DEL", label: "Delantero" }]}
+          />
+          <div className="flex gap-2">
+            <button onClick={() => setCreandoJugador(false)} className="flex-1 py-2 rounded-lg text-xs font-semibold border border-gray-200 text-gray-600">Cancelar</button>
+            <button onClick={crearJugadorRapido} disabled={!formJugador.nombre || savingJugador}
+              className="flex-1 py-2 rounded-lg text-xs font-semibold bg-[#1DB954] text-white disabled:opacity-50">
+              {savingJugador ? "Creando..." : "Crear y añadir"}
+            </button>
           </div>
         </div>
       )}
@@ -759,8 +919,11 @@ function EquipoDetalle({ supabase, club, onBack }) {
 
 function JugadoresTab({ supabase }) {
   const [jugadores, setJugadores] = useState([]);
+  const [clubs, setClubs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(null);
+  const [asignandoEquipo, setAsignandoEquipo] = useState(null); // jugador id
+  const [busquedaClub, setBusquedaClub] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const emptyForm = {
     nombre: "", apellidos: "", nombre_futbolistico: "", posicion: "MED",
@@ -772,11 +935,12 @@ function JugadoresTab({ supabase }) {
   const [form, setForm] = useState(emptyForm);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from("jugadores")
-      .select("*, jugador_club(club:clubs(nombre), activo)")
-      .order("nombre");
+    const [{ data }, { data: clubsData }] = await Promise.all([
+      supabase.from("jugadores").select("*, jugador_club(id, club:clubs(id, nombre), activo)").order("nombre"),
+      supabase.from("clubs").select("id, nombre").order("nombre"),
+    ]);
     setJugadores(data || []);
+    setClubs(clubsData || []);
     setLoading(false);
   }, [supabase]);
 
@@ -805,6 +969,22 @@ function JugadoresTab({ supabase }) {
     if (!confirm("Eliminar este jugador?")) return;
     await supabase.from("jugador_club").delete().eq("jugador_id", id);
     await supabase.from("jugadores").delete().eq("id", id);
+    load();
+  }
+
+  async function asignarAClub(jugadorId, clubId) {
+    const { data: temp } = await supabase.from("temporadas").select("id").limit(1).single();
+    // Desactivar equipo anterior
+    await supabase.from("jugador_club").update({ activo: false }).eq("jugador_id", jugadorId).eq("activo", true);
+    // Insertar en nuevo equipo
+    await supabase.from("jugador_club").insert({ jugador_id: jugadorId, club_id: clubId, temporada_id: temp?.id, activo: true });
+    setAsignandoEquipo(null);
+    setBusquedaClub("");
+    load();
+  }
+
+  async function quitarDeEquipo(jugadorId) {
+    await supabase.from("jugador_club").update({ activo: false }).eq("jugador_id", jugadorId).eq("activo", true);
     load();
   }
 
@@ -927,7 +1107,7 @@ function JugadoresTab({ supabase }) {
             value={form.foto_url}
             onChange={(v) => setForm({ ...form, foto_url: v })}
             bucket="escudos"
-            path={`jugadores/${form.nombre?.toLowerCase().replace(/\s+/g, "-") || "jugador"}-${form.apellidos?.toLowerCase().replace(/\s+/g, "-") || ""}`}
+            path={`jugadores/${sanitizePath(form.nombre) || "jugador"}-${sanitizePath(form.apellidos) || Date.now()}`}
             supabase={supabase}
           />
           <div>
@@ -954,26 +1134,57 @@ function JugadoresTab({ supabase }) {
       <div className="space-y-1.5">
         {filtrados.slice(0, 50).map((j) => {
           const clubActivo = j.jugador_club?.find((jc) => jc.activo);
+          const esteAsignando = asignandoEquipo === j.id;
           return (
-            <div key={j.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
-              <div className="w-8 h-8 rounded-full bg-[#1DB954]/10 text-[#1DB954] flex items-center justify-center text-xs font-bold shrink-0">
-                {j.posicion?.slice(0, 3)}
+            <div key={j.id} className="bg-gray-50 rounded-xl p-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-[#1DB954]/10 text-[#1DB954] flex items-center justify-center text-xs font-bold shrink-0">
+                  {j.posicion?.slice(0, 3)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">
+                    {j.nombre_futbolistico || `${j.nombre} ${j.apellidos}`}
+                  </p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {clubActivo ? (
+                      <>
+                        <span className="text-xs text-gray-500">{clubActivo.club?.nombre}</span>
+                        <button onClick={() => quitarDeEquipo(j.id)}
+                          className="text-[10px] text-red-400 hover:text-red-600 font-semibold">
+                          Sin equipo
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => { setAsignandoEquipo(j.id); setBusquedaClub(""); }}
+                        className="text-[10px] text-[#1DB954] font-semibold">
+                        + Asignar equipo
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  <BtnSmall label="Editar" color="green" onClick={() => editarJugador(j)} />
+                  <BtnSmall label="Eliminar" color="red" onClick={() => handleEliminar(j.id)} />
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">
-                  {j.nombre_futbolistico || `${j.nombre} ${j.apellidos}`}
-                </p>
-                <p className="text-xs text-gray-400">
-                  {clubActivo?.club?.nombre || "Sin equipo"}
-                  {j.nombre_futbolistico && (
-                    <span className="ml-1">({j.nombre} {j.apellidos})</span>
-                  )}
-                </p>
-              </div>
-              <div className="flex gap-1.5">
-                <BtnSmall label="Editar" color="green" onClick={() => editarJugador(j)} />
-                <BtnSmall label="Eliminar" color="red" onClick={() => handleEliminar(j.id)} />
-              </div>
+
+              {esteAsignando && (
+                <div className="mt-2 bg-white border border-gray-200 rounded-lg p-2">
+                  <input value={busquedaClub} onChange={(e) => setBusquedaClub(e.target.value)}
+                    placeholder="Buscar equipo..." autoFocus
+                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs mb-1 focus:outline-none focus:ring-2 focus:ring-[#1DB954]/30"
+                  />
+                  <div className="max-h-32 overflow-y-auto space-y-0.5">
+                    {clubs.filter((c) => c.nombre.toLowerCase().includes(busquedaClub.toLowerCase())).slice(0, 8).map((c) => (
+                      <button key={c.id} onClick={() => asignarAClub(j.id, c.id)}
+                        className="w-full text-left text-xs px-3 py-1.5 rounded-lg hover:bg-[#1DB954]/10">
+                        {c.nombre}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setAsignandoEquipo(null)} className="text-xs text-gray-400 mt-1 hover:text-gray-600">Cancelar</button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -1477,6 +1688,16 @@ function Select({ label, value, onChange, options }) {
 
 function Row({ children }) {
   return <div className="flex gap-2">{children}</div>;
+}
+
+function sanitizePath(str) {
+  return (str || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase() || "archivo";
 }
 
 function BtnSmall({ label, color, onClick }) {
