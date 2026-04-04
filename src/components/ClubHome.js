@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
@@ -56,6 +56,13 @@ export default function ClubHome({
   const router = useRouter();
   const supabase = createClient();
 
+  // Reloj para calcular minutos en vivo
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
   const [editMode, setEditMode] = useState(false);
   const [club, setClub] = useState(clubProp);
   const [partidos, setPartidos] = useState(partidosProp);
@@ -108,11 +115,14 @@ export default function ClubHome({
   const sorted = [...(tabla || [])].sort((a, b) => b.puntos - a.puntos || (b.gf - b.gc) - (a.gf - a.gc));
   const posicion = sorted.findIndex((r) => r.club_id === club.id) + 1;
 
-  // Jornada tabs
-  const grupoPartidosFinalizados = (jornadaPartidos || []).filter((p) => p.estado === "finalizado");
-  const maxJornada = grupoPartidosFinalizados.length > 0
-    ? Math.max(...grupoPartidosFinalizados.map((p) => p.jornada || 0))
-    : 0;
+  // Jornada activa: primero busca partidos en_vivo, si no, la última jornada con partidos jugados
+  const partidos_enVivo = (jornadaPartidos || []).filter((p) => p.estado === "en_vivo");
+  const partidos_jugados = (jornadaPartidos || []).filter((p) => p.estado === "finalizado" || p.estado === "en_vivo");
+  const maxJornada = partidos_enVivo.length > 0
+    ? partidos_enVivo[0].jornada || 0
+    : partidos_jugados.length > 0
+      ? Math.max(...partidos_jugados.map((p) => p.jornada || 0))
+      : 0;
   const jornadaActualPartidos = (jornadaPartidos || []).filter((p) => p.jornada === maxJornada);
   const siguienteJornada = maxJornada + 1;
   const siguienteJornadaPartidos = (jornadaPartidos || []).filter((p) => p.jornada === siguienteJornada);
@@ -237,7 +247,7 @@ export default function ClubHome({
         <div className="absolute right-0 top-0 w-40 h-40 rounded-full opacity-10 bg-white translate-x-12 -translate-y-12 pointer-events-none" />
         <div className="absolute right-10 bottom-0 w-24 h-24 rounded-full opacity-10 bg-white translate-y-8 pointer-events-none" />
 
-        <div className="relative flex items-center gap-4">
+        <div className="relative flex items-center gap-3">
           {/* Escudo */}
           <div className="relative shrink-0">
             <div className="w-16 h-16 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden">
@@ -268,23 +278,25 @@ export default function ClubHome({
             )}
           </div>
 
+          {/* Nombre + liga + seguidores */}
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold opacity-70">Mi equipo</p>
-            <h2 className="text-xl font-black truncate leading-tight">{club.nombre}</h2>
+            <p className="text-[10px] font-semibold opacity-60 uppercase tracking-wider">Mi equipo</p>
+            <h2 className="text-lg font-black truncate leading-tight">{club.nombre}</h2>
             {liga && (
-              <p className="text-xs opacity-80">{liga.nombre}{liga.categoria ? ` · ${liga.categoria}` : ""}</p>
+              <p className="text-xs opacity-75 truncate">{liga.nombre}{liga.categoria ? ` · ${liga.categoria}` : ""}</p>
             )}
-            <div className="flex flex-wrap gap-2 mt-1">
-              {posicion > 0 && (
-                <span className="text-[10px] font-bold bg-white/20 rounded-full px-2 py-0.5">
-                  {posicion}º en {liga?.nombre || "la liga"}
-                </span>
-              )}
-              <span className="text-[10px] font-bold bg-white/20 rounded-full px-2 py-0.5">
-                👥 {seguidores} seguidores
-              </span>
-            </div>
+            <span className="inline-block text-[10px] font-semibold bg-white/20 rounded-full px-2 py-0.5 mt-0.5">
+              👥 {seguidores} seguidores
+            </span>
           </div>
+
+          {/* Posición — grande a la derecha */}
+          {posicion > 0 && (
+            <div className="shrink-0 text-center">
+              <p className="text-4xl font-black leading-none tabular-nums">{posicion}º</p>
+              <p className="text-[9px] opacity-60 uppercase tracking-wider mt-0.5">posición</p>
+            </div>
+          )}
         </div>
 
         {/* Stats row */}
@@ -309,6 +321,27 @@ export default function ClubHome({
           </div>
         )}
 
+        {/* Forma dentro del banner */}
+        {forma.length > 0 && (
+          <div className="relative flex items-center gap-2 mt-3 pt-3 border-t border-white/20">
+            <span className="text-[9px] font-bold opacity-60 uppercase tracking-wider shrink-0">Forma</span>
+            <div className="flex gap-1.5">
+              {forma.map((r, i) => (
+                <span
+                  key={i}
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
+                    r === "V" ? "bg-white/25 text-white" :
+                    r === "E" ? "bg-white/15 text-white/80" :
+                    "bg-black/20 text-white/70"
+                  }`}
+                >
+                  {r}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Cambiar equipo */}
         <button
           onClick={handleCambiarEquipo}
@@ -318,20 +351,6 @@ export default function ClubHome({
           {cambiandoEquipo ? "..." : "Cambiar equipo →"}
         </button>
       </section>
-
-      {/* ---- Section 2: Forma ---- */}
-      {forma.length > 0 && (
-        <section className="px-4 py-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-            Últimos 5
-          </p>
-          <div className="flex gap-1.5">
-            {forma.map((r, i) => (
-              <span key={i}>{FormaLabel(r)}</span>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* ---- Section 3: Partidos cards ---- */}
       <section className="px-4 pb-3">
@@ -449,15 +468,18 @@ export default function ClubHome({
       {/* ---- Section 6: Jornada ---- */}
       {jornadaPartidos && jornadaPartidos.length > 0 && (
         <section className="px-4 pb-3">
-          <div className="flex gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-3">
             <button
               onClick={() => setJornadaTab("actual")}
-              className={`text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${
+              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${
                 jornadaTab === "actual"
                   ? "bg-[#1DB954] text-white"
                   : "bg-gray-100 text-gray-500"
               }`}
             >
+              {partidos_enVivo.length > 0 && jornadaTab === "actual" && (
+                <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse" />
+              )}
               Jornada {maxJornada}
             </button>
             {siguienteJornadaPartidos.length > 0 && (
@@ -481,6 +503,7 @@ export default function ClubHome({
                   key={p.id}
                   partido={p}
                   clubId={club.id}
+                  now={now}
                   editMode={editMode}
                   isEditing={editingPartidoId === p.id}
                   editData={editPartidoData}
@@ -618,7 +641,7 @@ function PartidoCard({
         <EscudoBadge club={rival} size="sm" />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold truncate">
-            {esLocal ? "vs " : "@ "}{rival?.nombre}
+            vs {rival?.nombre}
           </p>
           {partido.fecha && (
             <p className="text-[10px] text-gray-400">
@@ -772,9 +795,24 @@ function ClasificacionRow({ row, pos, sorted, highlight, full }) {
   );
 }
 
+function calcularMinutoVivo(fecha, hora, now) {
+  if (!fecha || !hora) return null;
+  // hora puede ser "16:00:00" o "16:00"
+  const horaStr = hora.length === 5 ? hora + ":00" : hora;
+  const inicio = new Date(`${fecha}T${horaStr}`);
+  const diff = (now - inicio) / 60000; // minutos transcurridos
+  if (diff < 0) return null; // aún no ha empezado
+  if (diff <= 45) return `${Math.floor(diff)}'`;
+  if (diff <= 47) return "45+'"; // 2 min de descuento primera parte
+  if (diff <= 90) return `${Math.floor(diff)}'`;
+  if (diff <= 95) return "90+'"; // 5 min de descuento segunda parte
+  return "90+'";
+}
+
 function JornadaPartidoRow({
   partido,
   clubId,
+  now,
   editMode,
   isEditing,
   editData,
@@ -814,15 +852,27 @@ function JornadaPartidoRow({
             </span>
           </div>
         </div>
-        <div className="text-center min-w-[44px]">
+        <div className="text-center min-w-[48px]">
           {partido.estado === "en_vivo" ? (
-            <span className="text-[10px] font-bold text-red-500 animate-pulse">Vivo</span>
+            <div>
+              <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse inline-block mb-0.5" />
+              <p className="text-xs font-black text-red-500 tabular-nums leading-none">
+                {calcularMinutoVivo(partido.fecha, partido.hora, now) || "Vivo"}
+              </p>
+            </div>
           ) : partido.estado === "finalizado" ? (
-            <span className="text-[9px] text-gray-400 uppercase">Final</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase">Final</span>
           ) : (
-            <span className="text-[10px] font-semibold text-gray-500">
-              {partido.hora?.slice(0, 5)}
-            </span>
+            <div>
+              {partido.fecha && (
+                <p className="text-[9px] text-gray-400">
+                  {new Date(partido.fecha + "T12:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                </p>
+              )}
+              <p className="text-[10px] font-semibold text-gray-500">
+                {partido.hora?.slice(0, 5)}
+              </p>
+            </div>
           )}
         </div>
       </div>
